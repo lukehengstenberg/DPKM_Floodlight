@@ -190,6 +190,7 @@ public class DpkmConfigureWG implements IFloodlightModule, IDpkmConfigureWGServi
 	        			constructAddPeerMessage(sw, msg.getIpv4Addr());
 	        		}
 	        		else if(checkConnectedAny(msg) >= 1) {
+	        			updatePeerInfo(msg, true);
 	        			constructDeletePeerMessage(sw, msg.getIpv4Addr(), false);
 	        		}
 	        		else if(checkConfigured() == 1) {
@@ -199,25 +200,32 @@ public class DpkmConfigureWG implements IFloodlightModule, IDpkmConfigureWGServi
 			}
 	        // This statement is executed if a peer has been added successfully.
 	        if(msg.getStatusFlag() == OFDpkmStatusFlag.DPKM_STATUS_FLAG_PEER_ADDED) {
-	        	if(checkConnected(msg) == 0) {
+	        	if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), false) == 0) {
 	        		addPeerConnection(msg);
 	        		IOFSwitch targetSW = switchService.getSwitch(DatapathId.of(getDpId(msg.getIpv4Peer())));
         			constructAddPeerMessage(targetSW, msg.getIpv4Peer());
 	        	}
-	        	else if(checkConnected(msg) >= 1) {
-	        		updatePeerInfo(msg);
+	        	else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), false) >= 1) {
+	        		updatePeerInfo(msg, false);
 	        	} else {
 	        		System.out.println("An error occurred adding peer info to DB.");
 	        	}
 	        }
 	        // This statement is executed if a peer has been deleted successfully. 
 	        if(msg.getStatusFlag() == OFDpkmStatusFlag.DPKM_STATUS_FLAG_PEER_REMOVED) {
-	        	if(checkConnectedAny(msg) >= 1) {
+	        	if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), false) > 0) {
+	        		IOFSwitch targetSW = switchService.getSwitch(DatapathId.of(getDpId(msg.getIpv4Peer())));
+	        		constructDeletePeerMessage(targetSW, msg.getIpv4Peer(), false);
+	        		removePeerConnection(msg);
+	        	}
+	        	else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), true) > 0) {
 	        		IOFSwitch targetSW = switchService.getSwitch(DatapathId.of(getDpId(msg.getIpv4Peer())));
 	        		constructDeletePeerMessage(targetSW, msg.getIpv4Peer(), true);
 	        		removePeerConnection(msg);
 	        	}
-	        	constructAddPeerMessage(sw, msg.getIpv4Addr());
+	        	else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), false) == 0) {
+	        		System.out.println("Peer removed from both switches.");
+	        	}
 	        }
 		} catch (SQLException e) {
 			// TODO Auto-generated catch block
@@ -275,7 +283,7 @@ public class DpkmConfigureWG implements IFloodlightModule, IDpkmConfigureWGServi
 	}
 	@Override
 	public List<DpkmPeers> getPeers() {
-		String getSQL = "SELECT ConfiguredPeer1.Dpid as 'Dpid1', ConfiguredPeer1.IPv4Addr as 'IPv4Addr1', "
+		String getSQL = "SELECT CommunicatingPeers.Cid, ConfiguredPeer1.Dpid as 'Dpid1', ConfiguredPeer1.IPv4Addr as 'IPv4Addr1', "
 				+ "ConfiguredPeer1.IPv4AddrWG as 'IPv4AddrWG1', ConfiguredPeer2.Dpid as 'Dpid2', "
 				+ "ConfiguredPeer2.IPv4Addr as 'IPv4Addr2', ConfiguredPeer2.IPv4AddrWG as 'IPv4AddrWG2', "
 				+ "CommunicatingPeers.Status FROM CommunicatingPeers  "
@@ -290,6 +298,7 @@ public class DpkmConfigureWG implements IFloodlightModule, IDpkmConfigureWGServi
 				try (ResultSet rs = get.getResultSet()) {
 	    			while (rs.next()) {
 	    				DpkmPeers cPeer = new DpkmPeers();
+	    				cPeer.cid = rs.getInt("Cid");
 	    				cPeer.dpidA = rs.getString("Dpid1");
 	    			    cPeer.ipv4AddrA = rs.getString("IPv4Addr1");
 	    			    cPeer.ipv4AddrWGA = rs.getString("IPv4AddrWG1");
@@ -309,6 +318,29 @@ public class DpkmConfigureWG implements IFloodlightModule, IDpkmConfigureWGServi
 		}
 		return confPeers;
 	}
+	@Override
+	public void sendAddPeerMessage(String sourceDpid, String targetDpid) {
+		IOFSwitch sw = switchService.getSwitch(DatapathId.of(sourceDpid));
+		String getSQL = String.format("SELECT PubKey1, IPv4Addr, IPv4AddrWG "
+				+ "FROM cntrldb.ConfiguredPeers WHERE Dpid = '%s';", targetDpid);
+		try(Connection connect = ConnectionProvider.getConn();
+				PreparedStatement peerInfo = connect.prepareStatement(getSQL);) {
+			boolean isResult = peerInfo.execute();
+	    	do {
+	    		try (ResultSet rs = peerInfo.getResultSet()) {
+	    			while (rs.next()) {
+	    				sendAddPeerMessageInternal(sw, rs.getString("PubKey1"),rs.getString("IPv4Addr"),rs.getString("IPv4AddrWG"));
+	    			}
+	    			isResult = peerInfo.getMoreResults();
+	    		}
+	    	} while (isResult);
+	    	connect.close();
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} 
+	}
+	
 	private void constructAddPeerMessage(IOFSwitch sw, String ipv4addr) throws SQLException {
 		String getCred = String.format("SELECT PubKey1, IPv4Addr, IPv4AddrWG "
 				+ "FROM cntrldb.ConfiguredPeers WHERE Status='CONFIGURED' AND IPv4Addr != '%s';", ipv4addr);
@@ -318,7 +350,7 @@ public class DpkmConfigureWG implements IFloodlightModule, IDpkmConfigureWGServi
 	    	do {
 	    		try (ResultSet rs = peerInfo.getResultSet()) {
 	    			while (rs.next()) {
-	    				sendAddPeerMessage(sw, rs.getString("PubKey1"),rs.getString("IPv4Addr"),rs.getString("IPv4AddrWG"));
+	    				sendAddPeerMessageInternal(sw, rs.getString("PubKey1"),rs.getString("IPv4Addr"),rs.getString("IPv4AddrWG"));
 	    			}
 	    			isResult = peerInfo.getMoreResults();
 	    		}
@@ -327,7 +359,7 @@ public class DpkmConfigureWG implements IFloodlightModule, IDpkmConfigureWGServi
 		}
 	}
 	
-	private void sendAddPeerMessage(IOFSwitch sw, String peerPubKey, String peerIPv4, String peerIPv4WG) {
+	private void sendAddPeerMessageInternal(IOFSwitch sw, String peerPubKey, String peerIPv4, String peerIPv4WG) {
 		System.out.println("SendAddPeerMessage has been called.");
 		try {
 		    OFDpkmAddPeer addPeerMsg = sw.getOFFactory().buildDpkmAddPeer()
@@ -337,12 +369,35 @@ public class DpkmConfigureWG implements IFloodlightModule, IDpkmConfigureWGServi
 				    .build();
 		    sw.write(addPeerMsg);
 		}
-		catch(NullPointerException e) {
-			System.out.println("NullPointerException Thrown at sendAddPeerMessage.");
+		catch(Exception e) {
+			System.out.println("Exception Thrown at sendAddPeerMessage.");
 		}
 	}
 	
-	private void constructDeletePeerMessage(IOFSwitch sw, String ipv4addr, boolean newKey) throws SQLException {
+	@Override
+	public void sendDeletePeerMessage(String sourceDpid, String targetDpid) {
+		IOFSwitch sw = switchService.getSwitch(DatapathId.of(sourceDpid));
+		String getSQL = String.format("SELECT PubKey1, IPv4Addr, IPv4AddrWG "
+				+ "FROM cntrldb.ConfiguredPeers WHERE Dpid = '%s';", targetDpid);
+		try(Connection connect = ConnectionProvider.getConn();
+				PreparedStatement peerInfo = connect.prepareStatement(getSQL);) {
+			boolean isResult = peerInfo.execute();
+	    	do {
+	    		try (ResultSet rs = peerInfo.getResultSet()) {
+	    			while (rs.next()) {
+	    				sendDeletePeerMessageInternal(sw, rs.getString("PubKey1"),rs.getString("IPv4Addr"),rs.getString("IPv4AddrWG"));
+	    			}
+	    			isResult = peerInfo.getMoreResults();
+	    		}
+	    	} while (isResult);
+	    	connect.close();
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} 
+	}
+	
+	private void constructDeletePeerMessage(IOFSwitch sw, String ipv4addr, boolean newKey) {
 		String getCred = String.format("SELECT A.PubKey1, A.IPv4Addr, A.IPv4AddrWG FROM "
 				+ "ConfiguredPeers A INNER JOIN CommunicatingPeers B ON "
 				+ "(A.id = B.PID1 OR A.id = B.PID2) AND A.IPv4Addr != '%s' "
@@ -363,16 +418,19 @@ public class DpkmConfigureWG implements IFloodlightModule, IDpkmConfigureWGServi
 	    	do {
 	    		try (ResultSet rs = peerInfo.getResultSet()) {
 	    			while (rs.next()) {
-	    				sendDeletePeerMessage(sw, rs.getString(1),rs.getString(2),rs.getString(3));
+	    				sendDeletePeerMessageInternal(sw, rs.getString(1),rs.getString(2),rs.getString(3));
 	    			}
 	    			isResult = peerInfo.getMoreResults();
 	    		}
 	    	} while (isResult);
 	    	connect.close();
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
 	}
 	
-	private void sendDeletePeerMessage(IOFSwitch sw, String peerPubKey, String peerIPv4, String peerIPv4WG) {
+	private void sendDeletePeerMessageInternal(IOFSwitch sw, String peerPubKey, String peerIPv4, String peerIPv4WG) {
 		System.out.println("SendDeletePeerMessage has been called.");
 		try {
 		    OFDpkmDeletePeer deletePeerMsg = sw.getOFFactory().buildDpkmDeletePeer()
@@ -469,13 +527,24 @@ public class DpkmConfigureWG implements IFloodlightModule, IDpkmConfigureWGServi
 		}
 	}
 	
-	private int checkConnected(OFDpkmStatus msg) throws SQLException {
+	@Override
+	public int checkConnected(String ipv4AddrA, String ipv4AddrB, boolean keyChange) {
 		String checkQ = String.format("SELECT COUNT(*) FROM CommunicatingPeers "
-				+ "WHERE (PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
+				+ "WHERE Status !='KEY CHANGED' AND "
+				+ "(PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
 				+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s')) OR "
 				+ "(PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
 				+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'));",
-				msg.getIpv4Addr(),msg.getIpv4Peer(),msg.getIpv4Peer(),msg.getIpv4Addr());
+				ipv4AddrA,ipv4AddrB,ipv4AddrB,ipv4AddrA);
+		if(keyChange) {
+			checkQ = String.format("SELECT COUNT(*) FROM CommunicatingPeers "
+					+ "WHERE Status ='KEY CHANGED' AND "
+					+ "(PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
+					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s')) OR "
+					+ "(PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
+					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'));",
+					ipv4AddrA,ipv4AddrB,ipv4AddrB,ipv4AddrA);
+		}
 		try(Connection connect = ConnectionProvider.getConn();
 				PreparedStatement checkConn = connect.prepareStatement(checkQ);) {
 			boolean isResult = checkConn.execute();
@@ -564,19 +633,26 @@ public class DpkmConfigureWG implements IFloodlightModule, IDpkmConfigureWGServi
 		}
 	}
 	
-	private void updatePeerInfo(OFDpkmStatus msg) throws SQLException {
+	private void updatePeerInfo(OFDpkmStatus msg, boolean keyChange) throws SQLException {
 		String updateQuery = String.format("UPDATE cntrldb.CommunicatingPeers SET Status='CONNECTED'"
 				+ "WHERE (PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
 				+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s')) OR "
 				+ "(PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
 				+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'));", 
 				msg.getIpv4Addr(), msg.getIpv4Peer(), msg.getIpv4Peer(), msg.getIpv4Addr());
+		if (keyChange) {
+			updateQuery = String.format("UPDATE cntrldb.CommunicatingPeers SET Status='KEY CHANGED'"
+					+ " WHERE (PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') OR "
+					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'));", 
+					msg.getIpv4Addr(), msg.getIpv4Addr());
+		}
 		try(Connection connect = ConnectionProvider.getConn();
 				PreparedStatement updateCon = connect.prepareStatement(updateQuery);) {
 			updateCon.executeUpdate(updateQuery);
 			connect.close();
 		}
 	}
+	
 	
 	private void removePeerConnection(OFDpkmStatus msg) throws SQLException {
 		String removeQuery = String.format("DELETE FROM cntrldb.CommunicatingPeers WHERE "

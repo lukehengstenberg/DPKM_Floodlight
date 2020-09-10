@@ -40,7 +40,6 @@ public class DpkmConfigureWGResource extends ServerResource {
 				(IDpkmConfigureWGService)getContext().getAttributes()
 				.get(IDpkmConfigureWGService.class.getCanonicalName());
 		DpkmSwitchNew node = jsonToDpkmSwitch(fmJson);
-		System.out.println("Current dpid: " + node.dpid.toString());
 		if (node == null) {
 			return "{\"status\" : \"Error! Could not parse switch info, see log for details.\"}";
 		}

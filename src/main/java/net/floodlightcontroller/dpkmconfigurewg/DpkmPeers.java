@@ -1,6 +1,7 @@
 package net.floodlightcontroller.dpkmconfigurewg;
 
 public class DpkmPeers {
+	public int cid;
 	public String dpidA;
 	public String ipv4AddrA;
 	public String ipv4AddrWGA;
@@ -10,6 +11,7 @@ public class DpkmPeers {
 	public String status;
 	
 	public DpkmPeers() {
+		this.cid = 0;
 		this.dpidA = "";
 		this.ipv4AddrA = "";
 		this.ipv4AddrWGA = "";
