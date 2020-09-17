@@ -42,12 +42,12 @@ public class DpkmManagePeerResource extends ServerResource{
 			return "{\"status\" : \"Error! Could not parse switch info, see log for details.\"}";
 		}
 		String status = null;
-		if (configureWG.checkConnected(peers.ipv4AddrA, peers.ipv4AddrB, false) > 0) {
+		if (configureWG.checkConnected(peers.ipv4AddrA, peers.ipv4AddrB, 0) > 0) {
 			status = "Error! A peer connection with this switch already exists.";
 			log.error(status);
 			return ("{\"status\" : \"" + status + "\"}");
 		}
-		else if (configureWG.checkConnected(peers.ipv4AddrA, peers.ipv4AddrB, false) == -1) {
+		else if (configureWG.checkConnected(peers.ipv4AddrA, peers.ipv4AddrB, 0) == -1) {
 			status = "Error! Failed to access the database.";
 			log.error(status);
 			return ("{\"status\" : \"" + status + "\"}");

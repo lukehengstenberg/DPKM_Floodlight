@@ -15,8 +15,9 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
     
 	public List<DpkmSwitch> getSwitches ();
     public void sendSetKeyMessage (DatapathId dpid, int cryptoperiod);
+    public void sendDeleteKeyMessage (DatapathId dpid);
     public List<DpkmPeers> getPeers ();
-    public int checkConnected(String ipv4AddrA, String ipv4AddrB, boolean keyChange);
+    public int checkConnected(String ipv4AddrA, String ipv4AddrB, int statusType);
     public void sendAddPeerMessage(String sourceDpid, String targetDpid);
     public void sendDeletePeerMessage(String sourceDpid, String targetDpid);
 }

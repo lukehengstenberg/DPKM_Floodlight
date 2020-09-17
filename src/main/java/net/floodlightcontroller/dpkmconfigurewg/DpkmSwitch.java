@@ -2,6 +2,7 @@ package net.floodlightcontroller.dpkmconfigurewg;
 
 
 public class DpkmSwitch {
+	public int id;
 	public String dpid;
 	public String ipv4Addr;
 	public String ipv4AddrWG;
@@ -10,6 +11,7 @@ public class DpkmSwitch {
     public boolean compromised;
     
     public DpkmSwitch() {
+    	this.id = 0;
     	this.dpid = "";
     	this.ipv4Addr = "";
     	this.ipv4AddrWG = "";
