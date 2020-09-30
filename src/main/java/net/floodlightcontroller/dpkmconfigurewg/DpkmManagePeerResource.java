@@ -21,7 +21,7 @@ import com.fasterxml.jackson.databind.MappingJsonFactory;
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.core.internal.IOFSwitchService;
 
-public class DpkmManagePeerResource extends ServerResource{
+public class DpkmManagePeerResource extends ServerResource {
 	protected static Logger log = LoggerFactory.getLogger(DpkmConfigureWGResource.class);
 	
     @Get("json")
@@ -53,6 +53,7 @@ public class DpkmManagePeerResource extends ServerResource{
 			return ("{\"status\" : \"" + status + "\"}");
 		} else {
 			configureWG.sendAddPeerMessage(peers.dpidA, peers.dpidB);
+			//configureWG.sendAddPeerMessage(peers.dpidB, peers.dpidA);
 			status = "DPKM_ADD_PEER message sent to switch.";
 
 			return ("{\"status\" : \"" + status + "\"}");
@@ -85,7 +86,8 @@ public class DpkmManagePeerResource extends ServerResource{
 			log.error(status);
 			return ("{\"status\" : \"" + status + "\"}");
 		} else {
-			configureWG.sendDeletePeerMessage(peers.dpidA, peers.dpidB);
+			configureWG.sendDeletePeerMessage(peers.dpidA, peers.dpidB, false);
+			//configureWG.sendDeletePeerMessage(peers.dpidB, peers.dpidA);
 			status = "DPKM_DELETE_PEER message sent to switch.";
 
 			return ("{\"status\" : \"" + status + "\"}");

@@ -1,0 +1,51 @@
+package net.floodlightcontroller.dpkmconfigurewg;
+
+import java.util.Iterator;
+
+import org.restlet.resource.Post;
+import org.restlet.resource.ServerResource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class DpkmStartCommunicationResource extends ServerResource {
+	protected static Logger log = LoggerFactory.getLogger(DpkmConfigureWGResource.class);
+	
+	@Post
+    public String start(String fmJson) {
+    	IDpkmConfigureWGService configureWG = 
+				(IDpkmConfigureWGService)getContext().getAttributes()
+				.get(IDpkmConfigureWGService.class.getCanonicalName());
+		DpkmPeers peers = DpkmManagePeerResource.jsonToDpkmPeer(fmJson);
+		if (peers == null) {
+			return "{\"status\" : \"Error! Could not parse switch info, see log for details.\"}";
+		}
+		String status = null;
+		boolean exists = false;
+		Iterator<DpkmPeers> iter = configureWG.getPeers().iterator();
+		while (iter.hasNext()) {
+			DpkmPeers p = iter.next();
+			if (p.cid == peers.cid) {
+				peers.dpidA = p.dpidA;
+				peers.dpidB = p.dpidB;
+				peers.ipv4AddrA = p.ipv4AddrA;
+				peers.ipv4AddrB = p.ipv4AddrB;
+				exists = true;
+				break;
+			}
+		}
+		if (configureWG.checkConnected(peers.ipv4AddrA, peers.ipv4AddrB, 3) > 0) {
+			status = "Error! These peers are already communicating.";
+			log.error(status);
+			return ("{\"status\" : \"" + status + "\"}");
+		}
+		else if (!exists) {
+			status = "Error! No peer connection with this id exists.";
+			log.error(status);
+			return ("{\"status\" : \"" + status + "\"}");
+		} else {
+			configureWG.startCommunication(peers.dpidA, peers.dpidB);
+			status = "Peers added to flow table, directing traffic through WG port.";
+			return ("{\"status\" : \"" + status + "\"}");
+		}
+    }
+}

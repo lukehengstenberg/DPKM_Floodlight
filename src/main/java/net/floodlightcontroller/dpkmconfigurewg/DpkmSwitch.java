@@ -9,6 +9,7 @@ public class DpkmSwitch {
     public int cryptoperiod;
     public String status;
     public boolean compromised;
+    public String since;
     
     public DpkmSwitch() {
     	this.id = 0;
@@ -18,5 +19,6 @@ public class DpkmSwitch {
     	this.cryptoperiod = 0;
     	this.status = "";
     	this.compromised = false;
+    	this.since = "";
     }
 }
