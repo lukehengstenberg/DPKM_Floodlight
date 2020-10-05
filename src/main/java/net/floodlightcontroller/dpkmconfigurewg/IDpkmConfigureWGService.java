@@ -1,16 +1,20 @@
 package net.floodlightcontroller.dpkmconfigurewg;
 
-import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.List;
 
 import org.projectfloodlight.openflow.types.DatapathId;
 
-import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.core.module.IFloodlightService;
-import net.floodlightcontroller.core.types.SwitchMessagePair;
-import net.floodlightcontroller.util.ConcurrentCircularBuffer;
 
+/** 
+ * Defines the abstract functions for configuring WireGuard and provides a service
+ * for linking the REST APIs to methods in the module dpkmconfigurewg. <br>
+ * Important interface to add services to the underlying module through extending
+ * the base IFloodlightService class. 
+ * 
+ * @author Luke Hengstenberg 
+ * @version 1.0
+ */
 public interface IDpkmConfigureWGService extends IFloodlightService {
     
 	/** 
@@ -51,7 +55,10 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
 	 * statusType(1): count of connections with the status 'KEY CHANGED'.
 	 * statusType(2): count of connections with the status 'REMOVED'.
 	 * statusType(3): count of connections with the status 'COMMUNICATING'.
-	 * statusType(4): count of connections with the status 'PID1ONLY'
+	 * statusType(4): count of connections with the status 'PID1ONLY'.
+	 * statusType(5): count of connections with the status 'BOTH'.
+	 * statusType(6): count of connections with the status 'BOTH CHANGED'.
+	 * statusType(7): count of connections with the status 'BOTH REMOVED'.
 	 * Used internally for a number of conditional statements.  
 	 * @param ipv4AddrA IPv4 Address of a switch 'A'.
 	 * @param ipv4AddrB IPv4 Address of a switch 'B'.
@@ -89,5 +96,11 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
 	 */
     public void startCommunication(String dpidA, String dpidB);
     
+    /** 
+	 * Rekey's the switch after expiry of the given cryptoperiod.
+	 * This consists of reconfiguring the switch using a DPKM_SET_KEY message.   
+	 * @param dpid DatapathId of the switch. 
+	 * @param cryptoperiod Life span of the key in seconds.  
+	 */
     public void rekey(String dpid, int cryptoperiod);
 }

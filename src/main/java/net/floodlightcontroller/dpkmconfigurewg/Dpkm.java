@@ -102,69 +102,27 @@ public class Dpkm {
 	protected void sendAddPeerMessageInternal(IOFSwitch sw, String peerPubKey, String peerIPv4, String peerIPv4WG) {
 		try {
 			String sourceIPv4 = getIp(sw);
+		    // If no connection exists add new record with status 'PID1ONLY'.
+		    // Otherwise, update connection to status 'BOTH'. 
+		    if(checkConnected(sourceIPv4, peerIPv4, 0) == 0) {
+		    	addPeerConnection(sourceIPv4, peerIPv4);
+		    } 
+		    else if(checkConnected(sourceIPv4, peerIPv4, 7) > 0) {
+		    	updatePeerInfo(sourceIPv4, peerIPv4, 4);
+		    }
+		    else {
+		    	updatePeerInfo(sourceIPv4, peerIPv4, 5);
+		    }
 		    OFDpkmAddPeer addPeerMsg = sw.getOFFactory().buildDpkmAddPeer()
 				    .setKey(peerPubKey)
 				    .setIpv4Addr(peerIPv4)
 				    .setIpv4Wg(peerIPv4WG)
 				    .build();
 		    sw.write(addPeerMsg);
-		    // If no connection exists add new record with status 'PID1ONLY'.
-		    // Otherwise, update connection to status 'BOTH'. 
-		    if(checkConnected(sourceIPv4, peerIPv4, 0) == 0) {
-		    	addPeerConnection(sourceIPv4, peerIPv4);
-		    } else {
-		    	updatePeerInfo(sourceIPv4, peerIPv4, 4);
-		    }
-		    DpkmConfigureWG.log.info(String.format("DPKM_ADD_PEER message sent to switch %s", sw.getId().toString()));
 		}
 		catch(Exception e) {
 			e.printStackTrace();
 			System.out.println("Exception Thrown at sendAddPeerMessage.");
-		}
-	}
-	
-	/** 
-	 * Writes a DPKM_DELETE_PEER message to the given switch sw for any peer switches in db.
-	 * This triggers the switch to remove the peer info from its WireGuard interface, 
-	 * returning a DPKM_STATUS or error response message. 
-	 * Used internally to automatically remove peers. 
-	 * @param sw Instance of a switch connected to the controller. 
-	 * @param ipv4Addr IPv4 Address of the switch.
-	 * @param newKey Boolean to use alternative SQL query targeting old PubKey.
-	 * 				 Necessary for circumstances where key changes.  
-	 */
-	protected void constructDeletePeerMessage(IOFSwitch sw, String ipv4addr, boolean newKey) {
-		String getCred = String.format("SELECT A.PubKey1, A.IPv4Addr, A.IPv4AddrWG FROM "
-				+ "ConfiguredPeers A INNER JOIN CommunicatingPeers B ON "
-				+ "(A.id = B.PID1 OR A.id = B.PID2) AND A.IPv4Addr != '%s' AND B.Status != 'BOTH CHANGED' "
-				+ "WHERE B.PID1 IN (SELECT id FROM ConfiguredPeers WHERE IPv4Addr = '%s') OR "
-				+ "B.PID2 IN (SELECT id FROM ConfiguredPeers WHERE IPv4Addr ='%s');",
-				ipv4addr,ipv4addr,ipv4addr);
-		if(newKey) {
-			getCred = String.format("SELECT A.PubKey2, A.IPv4Addr, A.IPv4AddrWG FROM "
-					+ "ConfiguredPeers A INNER JOIN CommunicatingPeers B ON "
-					+ "(A.id = B.PID1 OR A.id = B.PID2) AND A.IPv4Addr != '%s' AND B.Status != 'BOTH CHANGED' "
-					+ "WHERE B.PID1 IN (SELECT id FROM ConfiguredPeers WHERE IPv4Addr = '%s') OR "
-					+ "B.PID2 IN (SELECT id FROM ConfiguredPeers WHERE IPv4Addr ='%s');",
-					ipv4addr,ipv4addr,ipv4addr);
-		}
-		// Connects to the database and executes the SQL statement.
-		try(Connection connect = ConnectionProvider.getConn();
-				PreparedStatement peerInfo = connect.prepareStatement(getCred);) {
-			boolean isResult = peerInfo.execute();
-	    	do {
-	    		try (ResultSet rs = peerInfo.getResultSet()) {
-	    			while (rs.next()) {
-	    				// Calls internal function to build and write message.
-	    				sendDeletePeerMessageInternal(sw, rs.getString(1),rs.getString(2),rs.getString(3));
-	    			}
-	    			isResult = peerInfo.getMoreResults();
-	    		}
-	    	} while (isResult);
-	    	connect.close();
-		} catch (SQLException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
 		}
 	}
 	
@@ -186,61 +144,9 @@ public class Dpkm {
 				    .setIpv4Wg(peerIPv4WG)
 				    .build();
 		    sw.write(deletePeerMsg);
-		    DpkmConfigureWG.log.info(String.format("DPKM_DELETE_PEER message sent to switch %s", sw.getId().toString()));
 		}
 		catch(NullPointerException e) {
 			System.out.println("NullPointerException Thrown at sendDeletePeerMessage.");
-		}
-	}
-	
-	/** 
-	 * Writes a DPKM_DELETE_PEER message to all with the switch with
-	 * IPv4 Address ipv4Addr in their peer table. 
-	 * This triggers the switches to remove the peer info from their WireGuard interfaces, 
-	 * returning DPKM_STATUS or error response messages. 
-	 * Used internally after a key has been removed, ensuring no peer connections remain. 
-	 * @param ipv4Addr IPv4 Address of the peer to be removed. 
-	 */
-	protected void constructDeletePeerBadKey(String ipv4Addr) {
-		// Gets list of peers from db, iterates finding any 
-		// connections that match ipv4Addr. 
-		Iterator<DpkmPeers> iter = confWG.getPeers().iterator();
-		while (iter.hasNext()) {
-			DpkmPeers p = iter.next();
-			if (p.ipv4AddrA.equalsIgnoreCase(ipv4Addr)) {
-				confWG.sendDeletePeerMessage(p.dpidB, p.dpidA, false);
-			}
-			if (p.ipv4AddrB.equalsIgnoreCase(ipv4Addr)) {
-				confWG.sendDeletePeerMessage(p.dpidA, p.dpidB, false);
-			}
-		}
-	}
-	
-	protected void sendTestRequestMessage(IOFSwitch sw) {
-		System.out.println("Sendtestrequestmessage has been called.");
-		try {
-		    OFDpkmTestRequest testRequestMsg = sw.getOFFactory().buildDpkmTestRequest()
-		    		.build();
-			
-			sw.write(testRequestMsg);
-		}
-		catch(NullPointerException e) {
-			System.out.println("NullPointerException Thrown!");
-		}
-	}
-	
-	protected void sendTestReplyMessage(IOFSwitch sw, OFDpkmTestRequest testRequestMsg) {
-		System.out.println("Sendtestreplymessage has been called.");
-		try {
-		    OFDpkmTestReply testReplyMsg = sw.getOFFactory().buildDpkmTestReply()
-		    		.setXid(testRequestMsg.getXid())
-		            .setData(testRequestMsg.getData())
-		    		.build();
-			
-			sw.write(testReplyMsg);
-		}
-		catch(NullPointerException e) {
-			System.out.println("NullPointerException Thrown!");
 		}
 	}
 	
@@ -295,7 +201,6 @@ public class Dpkm {
 	    	connect.close();
 		} catch (SQLException e) {
 			// TODO Auto-generated catch block
-			e.printStackTrace();
 			return("Error");
 		}
     	return("Error");
@@ -364,6 +269,7 @@ public class Dpkm {
 	 * statusType(4): count of connections with the status 'PID1ONLY'.
 	 * statusType(5): count of connections with the status 'BOTH'.
 	 * statusType(6): count of connections with the status 'BOTH CHANGED'.
+	 * statusType(7): count of connections with the status 'BOTH REMOVED'.
 	 * Used internally for a number of conditional statements.  
 	 * @param ipv4AddrA IPv4 Address of a switch 'A'.
 	 * @param ipv4AddrB IPv4 Address of a switch 'B'.
@@ -437,6 +343,16 @@ public class Dpkm {
 					+ "(PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
 					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'))) AND "
 					+ "Status = 'BOTH CHANGED';",
+					ipv4AddrA,ipv4AddrB,ipv4AddrB,ipv4AddrA);
+		}
+		// Checks connections where status is BOTH REMOVED.
+		else if(statusType == 7) {
+			checkQ = String.format("SELECT COUNT(*) FROM CommunicatingPeers "
+					+ "WHERE ((PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
+					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s')) OR "
+					+ "(PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
+					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'))) AND "
+					+ "Status = 'BOTH REMOVED';",
 					ipv4AddrA,ipv4AddrB,ipv4AddrB,ipv4AddrA);
 		}
 		// Connects to the database and executes the SQL statement.
@@ -585,9 +501,10 @@ public class Dpkm {
 	 * statusChange(1): set connection status as 'KEY CHANGED'.
 	 * statusChange(2): set connection status as 'REMOVED'.
 	 * statusChange(3): set connection status as 'COMMUNICATING'. 
-	 * statusChange(4): set connection status as 'BOTH'. 
-	 * statusChange(5): set connection status as 'BOTH CHANGED'.
-	 * statusChange(6): set connection status as 'PID1ONLY'.
+	 * statusChange(4): set connection status as 'PID1ONLY'. 
+	 * statusChange(5): set connection status as 'BOTH'.
+	 * statusChange(6): set connection status as 'BOTH CHANGED'.
+	 * statusChange(7): set connection status as 'BOTH REMOVED'.
 	 * Used internally to update an existing peer connection to reflect state of switch. 
 	 * @param ipv4Addr IPv4 Address of the source peer switch.
 	 * @param ipv4AddrPeer IPv4 Address of the target peer switch.
@@ -626,8 +543,17 @@ public class Dpkm {
 					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'));", 
 					ipv4Addr, ipv4AddrPeer, ipv4AddrPeer, ipv4Addr);
 		}
-		// Message sent to both but not confirmed so connection status is BOTH. 
+		// Maintain connection but only peer on one so connection status is PID1ONLY. 
 		else if (statusChange == 4) {
+			updateQuery = String.format("UPDATE cntrldb.CommunicatingPeers SET Status='PID1ONLY'"
+					+ "WHERE (PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
+					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s')) OR "
+					+ "(PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
+					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'));", 
+					ipv4Addr, ipv4AddrPeer, ipv4AddrPeer, ipv4Addr);
+		}
+		// Message sent to both but not confirmed so connection status is BOTH. 
+		else if (statusChange == 5) {
 			updateQuery = String.format("UPDATE cntrldb.CommunicatingPeers SET Status='BOTH'"
 					+ "WHERE (PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
 					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s')) OR "
@@ -636,7 +562,7 @@ public class Dpkm {
 					ipv4Addr, ipv4AddrPeer, ipv4AddrPeer, ipv4Addr);
 		}
 		// Both peer keys have changed so connection status is BOTH CHANGED. 
-		else if (statusChange == 5) {
+		else if (statusChange == 6) {
 			updateQuery = String.format("UPDATE cntrldb.CommunicatingPeers SET Status='BOTH CHANGED'"
 					+ "WHERE (PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
 					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s')) OR "
@@ -644,9 +570,10 @@ public class Dpkm {
 					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'));", 
 					ipv4Addr, ipv4AddrPeer, ipv4AddrPeer, ipv4Addr);
 		}
-		// Maintain connection but only peer on one so connection status is PID1ONLY. 
-		else if (statusChange == 6) {
-			updateQuery = String.format("UPDATE cntrldb.CommunicatingPeers SET Status='PID1ONLY'"
+		
+		// Both peer keys have been removed from the interfaces so connection status is BOTH REMOVED. 
+		else if (statusChange == 7) {
+			updateQuery = String.format("UPDATE cntrldb.CommunicatingPeers SET Status='BOTH REMOVED'"
 					+ "WHERE (PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
 					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s')) OR "
 					+ "(PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
@@ -705,32 +632,5 @@ public class Dpkm {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-	}
-	protected long getQueueId(IOFSwitch sw) {
-		OFQueueStatsRequest sr = sw.getOFFactory().buildQueueStatsRequest().build();
-		ListenableFuture<List<OFQueueStatsReply>> future = sw.writeStatsRequest(sr);
-		try {
-			// Wait up to 10s for a reply; return when received or throw exception.
-			List<OFQueueStatsReply> replies = future.get(10, TimeUnit.SECONDS);
-			for (OFQueueStatsReply reply : replies) {
-		        for (OFQueueStatsEntry e : reply.getEntries()) {
-		            long id = e.getQueueId();
-		            return id;
-		        }
-		    }
-		} catch (InterruptedException | ExecutionException | TimeoutException e) {
-			e.printStackTrace();
-		}
-		return (long) 0;
-	}
-	protected void queuePackets(String dpid) {
-		IOFSwitch sw = switchService.getSwitch(DatapathId.of(dpid));
-		
-		ArrayList<OFAction> actions = new ArrayList<OFAction>();
-		OFActionSetQueue setQueue = sw.getOFFactory().actions().buildSetQueue()
-				.setQueueId(getQueueId(sw))
-				.build();
-		actions.add(setQueue);
-				
 	}
 }

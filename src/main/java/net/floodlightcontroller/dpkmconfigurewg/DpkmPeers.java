@@ -1,5 +1,12 @@
 package net.floodlightcontroller.dpkmconfigurewg;
 
+/** 
+ * Object representing a peer connection between switch A and switch B. <br>
+ * Stores useful information during a number of peer related procedures. 
+ * 
+ * @author Luke Hengstenberg 
+ * @version 1.0
+ */
 public class DpkmPeers {
 	public int cid;
 	public String dpidA;

@@ -7,9 +7,22 @@ import org.restlet.resource.ServerResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/** 
+ * REST API for starting communication between two connected peers. <br>
+ * Takes json data from UI and deserializes, executing startCommunication function.   
+ * 
+ * @author Luke Hengstenberg 
+ * @version 1.0
+ */
 public class DpkmStartCommunicationResource extends ServerResource {
 	protected static Logger log = LoggerFactory.getLogger(DpkmConfigureWGResource.class);
 	
+	/** 
+	 * Starts communication for connection with matching peer information in json.
+	 * Deserializes to get both peer switch information, sending FLOW_ADD messages on success.
+	 * @param fmJson Json structure containing peer information.  
+	 * @return String status either success or error. 
+	 */
 	@Post
     public String start(String fmJson) {
     	IDpkmConfigureWGService configureWG = 

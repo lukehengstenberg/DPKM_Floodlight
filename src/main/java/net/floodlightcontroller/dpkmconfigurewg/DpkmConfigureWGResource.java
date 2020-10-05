@@ -24,10 +24,22 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.MappingJsonFactory;
 
+/** 
+ * REST APIs for getting all configured switches, adding/configuring a new switch,
+ * and deleting a configured switch. <br>
+ * Takes json data from UI and deserializes, executing corresponding function.   
+ * 
+ * @author Luke Hengstenberg 
+ * @version 1.0
+ */
 public class DpkmConfigureWGResource extends ServerResource {
 	protected static Logger log = LoggerFactory.getLogger(DpkmConfigureWGResource.class);
 	protected IOFSwitchService switchService;
 	
+	/** 
+	 * Returns a full list of configured switches from the db in json format. 
+	 * @return List<DpkmSwitch> List of WG switches from db. 
+	 */
 	@Get("json")
 	public List<DpkmSwitch> retrieve() {
 		IDpkmConfigureWGService configureWG = 
@@ -36,6 +48,12 @@ public class DpkmConfigureWGResource extends ServerResource {
 		return configureWG.getSwitches();
 	}
 	
+	/** 
+	 * Configures WG interface in the given switch and sets the cryptoperiod.
+	 * Deserializes to get dpid and cryptoperiod, sending SET_KEY message on success.
+	 * @param fmJson Json structure containing switch information.  
+	 * @return String status either success or error. 
+	 */
 	@Post
 	public String configure(String fmJson) {
 		IDpkmConfigureWGService configureWG = 
@@ -52,6 +70,12 @@ public class DpkmConfigureWGResource extends ServerResource {
 		return ("{\"status\" : \"" + status + "\"}");
 	}
 	
+	/** 
+	 * Deletes/unconfigures WG interface for switch matching the given id.
+	 * Deserializes to get id, finds db record, sending DELETE_KEY message on success.
+	 * @param fmJson Json structure containing switch information.  
+	 * @return String status either success or error. 
+	 */
 	@Delete
 	public String delete(String fmJson) {
 		IDpkmConfigureWGService configureWG = 
@@ -64,6 +88,7 @@ public class DpkmConfigureWGResource extends ServerResource {
 		String status = null;
 		boolean exists = false;
 		Iterator<DpkmSwitch> iter = configureWG.getSwitches().iterator();
+		// Loop through switch records to find switch information.
 		while (iter.hasNext()) {
 			DpkmSwitch s = iter.next();
 			if (s.id == node.id) {
@@ -83,6 +108,12 @@ public class DpkmConfigureWGResource extends ServerResource {
 		}
 	}
 	
+	/** 
+	 * Converts switch information given in json format to a DpkmSwitch object.
+	 * Maps each json value to a field in DpkmSwitch.
+	 * @param fmJson Json structure containing switch information.  
+	 * @return DpkmSwitch switch object created from json. 
+	 */
 	public static DpkmSwitch jsonToDpkmSwitch(String fmJson) {
 		DpkmSwitch node = new DpkmSwitch();
 		MappingJsonFactory f = new MappingJsonFactory();

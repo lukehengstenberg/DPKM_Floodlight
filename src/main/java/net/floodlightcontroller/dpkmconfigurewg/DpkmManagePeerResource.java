@@ -1,11 +1,9 @@
 package net.floodlightcontroller.dpkmconfigurewg;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-import org.projectfloodlight.openflow.types.DatapathId;
 import org.restlet.resource.Delete;
 import org.restlet.resource.Get;
 import org.restlet.resource.Post;
@@ -18,12 +16,21 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.MappingJsonFactory;
 
-import net.floodlightcontroller.core.IOFSwitch;
-import net.floodlightcontroller.core.internal.IOFSwitchService;
 
+/** 
+ * REST APIs for retrieving peers and adding/deleting a peer connection. <br>
+ * Takes json data from UI and deserializes, executing corresponding function.   
+ * 
+ * @author Luke Hengstenberg 
+ * @version 1.0
+ */
 public class DpkmManagePeerResource extends ServerResource {
 	protected static Logger log = LoggerFactory.getLogger(DpkmConfigureWGResource.class);
 	
+	/** 
+	 * Returns a full list of peer connections from the db in json format. 
+	 * @return List<DpkmPeers> List of WG peers from db. 
+	 */
     @Get("json")
     public List<DpkmPeers> retrieve() {
     	IDpkmConfigureWGService configureWG = 
@@ -32,6 +39,12 @@ public class DpkmManagePeerResource extends ServerResource {
     	return configureWG.getPeers();
     }
 	
+    /** 
+	 * Adds a new peer connection for the switch information in the given json.
+	 * Deserializes to get both peer switch information, sending ADD_PEER message on success.
+	 * @param fmJson Json structure containing switch information.  
+	 * @return String status either success or error. 
+	 */
     @Post
     public String add(String fmJson) {
     	IDpkmConfigureWGService configureWG = 
@@ -52,14 +65,20 @@ public class DpkmManagePeerResource extends ServerResource {
 			log.error(status);
 			return ("{\"status\" : \"" + status + "\"}");
 		} else {
+			// Send add peer message to one switch, add second after status response.  
 			configureWG.sendAddPeerMessage(peers.dpidA, peers.dpidB);
-			//configureWG.sendAddPeerMessage(peers.dpidB, peers.dpidA);
 			status = "DPKM_ADD_PEER message sent to switch.";
 
 			return ("{\"status\" : \"" + status + "\"}");
 		}
     }
     
+    /** 
+	 * Deletes a peer connection for db record matching the id in the json.
+	 * Deserializes to get id, finds db record, sending DELETE_PEER message on success.
+	 * @param fmJson Json structure containing peer information.  
+	 * @return String status either success or error. 
+	 */
     @Delete
     public String delete(String fmJson) {
     	IDpkmConfigureWGService configureWG = 
@@ -72,6 +91,7 @@ public class DpkmManagePeerResource extends ServerResource {
 		String status = null;
 		boolean exists = false;
 		Iterator<DpkmPeers> iter = configureWG.getPeers().iterator();
+		// Loop through peers to find switch information. 
 		while (iter.hasNext()) {
 			DpkmPeers p = iter.next();
 			if (p.cid == peers.cid) {
@@ -86,14 +106,20 @@ public class DpkmManagePeerResource extends ServerResource {
 			log.error(status);
 			return ("{\"status\" : \"" + status + "\"}");
 		} else {
+			// Send delete peer message to one switch, delete second after status response.
 			configureWG.sendDeletePeerMessage(peers.dpidA, peers.dpidB, false);
-			//configureWG.sendDeletePeerMessage(peers.dpidB, peers.dpidA);
 			status = "DPKM_DELETE_PEER message sent to switch.";
 
 			return ("{\"status\" : \"" + status + "\"}");
 		}
     }
     
+    /** 
+	 * Converts peer information given in json format to a DpkmPeers object.
+	 * Maps each json value to a field in DpkmPeers.
+	 * @param fmJson Json structure containing peer information.  
+	 * @return DpkmPeers switch peer object created from json. 
+	 */
     public static DpkmPeers jsonToDpkmPeer(String fmJson) {
 		DpkmPeers peers = new DpkmPeers();
 		MappingJsonFactory f = new MappingJsonFactory();

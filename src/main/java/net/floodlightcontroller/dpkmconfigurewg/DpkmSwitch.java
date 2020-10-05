@@ -1,6 +1,12 @@
 package net.floodlightcontroller.dpkmconfigurewg;
 
-
+/** 
+ * Object representing a single switch in the DPKM protocol. <br>
+ * Stores useful information during a number of switch related procedures. 
+ * 
+ * @author Luke Hengstenberg 
+ * @version 1.0
+ */
 public class DpkmSwitch {
 	public int id;
 	public String dpid;

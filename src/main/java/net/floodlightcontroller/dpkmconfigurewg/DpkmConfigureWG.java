@@ -109,7 +109,6 @@ public class DpkmConfigureWG extends Dpkm implements IFloodlightModule, IDpkmCon
 	protected IFloodlightProviderService floodlightProvider;
 	protected IOFSwitchService switchService;
 	protected IRestApiService restApiService;
-    int testcount = 0;
 	
 	@Override
 	public String getName() {
@@ -141,6 +140,31 @@ public class DpkmConfigureWG extends Dpkm implements IFloodlightModule, IDpkmCon
 		    case EXPERIMENTER:
 		    	// Cast the message to a DPKM OpenFlow experimenter message.
 		    	OFDpkmHeader inExperimenter = (OFDpkmHeader) msg;
+		    	// Subtype 0 means a set key message has been sent.
+		    	if(inExperimenter.getSubtype() == 0) {
+		    		log.info(String.format("DPKM_SET_KEY message sent to switch %s", sw.getId().toString()));
+		    		break;
+		    	}
+		    	// Subtype 1 means a delete key message has been sent.
+		    	if(inExperimenter.getSubtype() == 1) {
+		    		log.info(String.format("DPKM_DELETE_KEY message sent to switch %s", sw.getId().toString()));
+		    		break;
+		    	}
+		    	// Subtype 2 means an add peer message has been sent.
+		    	if(inExperimenter.getSubtype() == 2) {
+		    		log.info(String.format("DPKM_ADD_PEER message sent to switch %s", sw.getId().toString()));
+		    		break;
+		    	}
+		    	// Subtype 3 means a delete peer message has been sent. 
+		    	if(inExperimenter.getSubtype() == 3) {
+		    		log.info(String.format("DPKM_DELETE_PEER message sent to switch %s", sw.getId().toString()));
+		    		break;
+		    	}
+		    	// Subtype 4 means a get status message has been sent. 
+		    	if(inExperimenter.getSubtype() == 4) {
+		    		log.info(String.format("DPKM_GET_STATUS message sent to switch %s", sw.getId().toString()));
+		    		break;
+		    	}
 		    	// Subtype 5 means a status message has been received and should be processed. 
 		    	if(inExperimenter.getSubtype() == 5) {
 		    		try {
@@ -151,8 +175,14 @@ public class DpkmConfigureWG extends Dpkm implements IFloodlightModule, IDpkmCon
 					}
 		    		break;
 		    	}
-		    	if(inExperimenter.getSubtype() == 8) {
-		    		sendTestRequestMessage(sw);
+		    	// Subtype 6 means an error message has been received and should be processed. 
+		    	if(inExperimenter.getSubtype() == 6) {
+		    		log.info(String.format("DPKM_ERROR message received from switch %s", sw.getId().toString()));
+		    		break;
+		    	}
+		    	// Subtypes 7 & 8 were used for test request/response messages. 
+		    	if(inExperimenter.getSubtype() == 7 || inExperimenter.getSubtype() == 8) {
+		    		log.info(String.format("DPKM_TEST message received from switch %s", sw.getId().toString()));
 		    		break;
 		    	}
 		    	else {
@@ -166,148 +196,193 @@ public class DpkmConfigureWG extends Dpkm implements IFloodlightModule, IDpkmCon
 	}
     
 	/** 
-	 * Processes the status message sent by the switch.
-	 * Uses the content of the message to query the database and respond accordingly.
+	 * Processes the status message sent by the switch based on the status flag.
+	 * Calls one of several functions to process based on type of status response.
 	 * @param sw Instance of a switch connected to the controller.
 	 * @param msg The received OpenFlow DPKM Status message.
 	 * @throws IOException.  
 	 */
-	private void processStatusMessage(IOFSwitch sw, OFDpkmStatus msg) throws IOException {
+	private synchronized void processStatusMessage(IOFSwitch sw, OFDpkmStatus msg) throws IOException {
 		log.info(String.format("A status response was received from switch %s.", sw.getId().toString()));
 		// Executed if the status response shows WG has been configured.
 		if(msg.getStatusFlag() == OFDpkmStatusFlag.DPKM_STATUS_FLAG_CONFIGURED) {
-			log.info(String.format("Switch %s has been configured successfully.", sw.getId().toString()));
-			// Adds the new WG switch to the database.
-			if(checkIPExists(msg.getIpv4Addr()).equals("0")) {
-				writeSwitchToDB(msg, sw);
-				// Checks for and adds any configured switches as peers. 
-				if(checkConfigured() >= 2) {
-					constructAddPeerMessage(sw, msg.getIpv4Addr());
-				}
-				else if(checkConfigured() == 1) {
-					log.info("No Peers to be added.");
-				} else {
-					log.error("An error was encountered when adding a peer.");
-				}
-			} 
-			// Logs if controller fails to access the database. 
-			else if(checkIPExists(msg.getIpv4Addr()).equals("Error")) {
-				log.error("An error was encountered when adding switch info to DB.");
-			} else {
-				// Updates existing switch details for new configuration. 
-				updateSwitchInDB(msg,sw);
-				// Checks for and adds any configured and unconnected switches as peers.
-				// TODO: This is broken.
-				if(checkConfigured() >= 2 && checkConnectedAny(msg.getIpv4Addr()) == 0) {
-					//constructAddPeerMessage(sw, msg.getIpv4Addr());
-				}
-				// Updates peer connection status to show that key changed.
-				// Deletes the peer since key is now invalid. 
-				else if(checkConnectedAny(msg.getIpv4Addr()) > 0) {
-					Iterator<DpkmPeers> iter = getPeers().iterator();
-					while (iter.hasNext()) {
-						DpkmPeers p = iter.next();
-						if (checkConnected(p.ipv4AddrA, p.ipv4AddrB, 1) > 0) {
-							System.out.println(p.dpidA + " " + p.dpidB);
-							// 5 == both keys changed.
-							updatePeerInfo(p.ipv4AddrA, p.ipv4AddrB, 5);
-							sendDeletePeerMessage(p.dpidA, p.dpidB, true);
-						} else {
-							System.out.println(p.dpidA + " " + p.dpidB);
-							// 1 == key changed.
-							updatePeerInfo(p.ipv4AddrA, p.ipv4AddrB, 1);
-							sendDeletePeerMessage(p.dpidB, p.dpidA, true);
-						}
-					}
-				}
-				else if(checkConfigured() == 1) {
-					log.info("No other WG configured switches in the DB. ");
-				}
-			}
+			processConfigured(sw, msg);
 		}
 		// Executed if the status response shows a peer has been added.
 		if(msg.getStatusFlag() == OFDpkmStatusFlag.DPKM_STATUS_FLAG_PEER_ADDED) {
-			log.info(String.format("Switch %s has successfully added %s as a WG peer.", 
-					sw.getId().toString(), getDpId(msg.getIpv4Peer())));
-			// If connection is 'PID1ONLY' (4) only one switch has established connection.
-			// Sends an add peer message to target peer, adding peer info to both WG interfaces.
-			if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 4) > 0) {
-				System.out.println("PID1ONLY");
-				IOFSwitch targetSW = switchService.getSwitch(DatapathId.of(getDpId(msg.getIpv4Peer())));
-				constructAddPeerMessage(targetSW, msg.getIpv4Peer());
-			}
-			// If connection is established on both, update peer connection status. 
-			else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 5) > 0) {
-				// 0 == key not changed. 
-				System.out.println("BOTH");
-				updatePeerInfo(msg.getIpv4Addr(), msg.getIpv4Peer(), 0);
-			} 
-			// If connection is 'CONNECTED' on both, confirm success.
-			else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 0) > 0) {
-				log.info(String.format("Full connection established between switch %s and switch %s.", 
-						sw.getId().toString(), getDpId(msg.getIpv4Peer())));
-			} else {
-				log.error("An error was encountered when adding peer info to DB.");
-			}
+			processPeerAdded(sw, msg);
 		}
 		// Executed if the status response shows a peer has been deleted. 
 		if(msg.getStatusFlag() == OFDpkmStatusFlag.DPKM_STATUS_FLAG_PEER_REMOVED) {
-			log.info(String.format("Switch %s has successfully removed %s as a WG peer.", 
-					sw.getId().toString(), getDpId(msg.getIpv4Peer())));
-			// Remove connection if exists and status 'REMOVED' (key removed).
-			if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 2) > 0) {
-				removePeerConnection(msg);
-				// Remove switch if no remaining peer connections.
-				if(checkConnectedAny(msg.getIpv4Peer()) == 0) {
-					removeSwitch(msg.getIpv4Peer());
-				}
-			}
-			// Called if one of the keys in a connection has changed, so one peer is removed.
-			else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 1) > 0) {
-				// Update the connection to PID1ONLY since peer removed on one interface.
-				updatePeerInfo(msg.getIpv4Addr(), msg.getIpv4Peer(), 6);
-				// Re-add the peer but with new key.
-				sendAddPeerMessage(sw.getId().toString(), getDpId(msg.getIpv4Peer()));
-			}
-			// Rare circumstance where both keys have changed. Connection removed and
-			// recreated, status first PID1ONLY, then BOTH, then CONNECTED.
-			else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 6) > 0) {
-				removePeerConnection(msg);
-				// Re-add one half of the peer connections with new key.
-				constructAddPeerMessage(sw, msg.getIpv4Addr());
-			}
-			// Called if a new connection has been added (PID1ONLY) whilst awaiting second
-			// DELETE_PEER message response. 
-			else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 4) > 0) {
-				// Re-add other half of the peer connections with new key.
-				constructAddPeerMessage(sw, msg.getIpv4Addr());
-			}
-			// Sends delete peer message to target peer, deleting peer info on both WG interfaces. (if exists).
-			// Removes connection from db. 
-			else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 0) > 0) {
-				IOFSwitch targetSW = switchService.getSwitch(DatapathId.of(getDpId(msg.getIpv4Peer())));
-				constructDeletePeerMessage(targetSW, msg.getIpv4Peer(), false);
-				removePeerConnection(msg);
-			}
-			// Connection removed from both switches. 
-			else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 0) == 0) {
-				log.info("Peer removed from both switches.");
-			}
+			processPeerRemoved(sw, msg);
 		}
 		// Executed if the status response shows a key has been revoked (unconfigured). 
 		if(msg.getStatusFlag() == OFDpkmStatusFlag.DPKM_STATUS_FLAG_REVOKED) {
-			log.info(String.format("Switch %s has successfully deleted it's key.", sw.getId().toString()));
-			// If connections to unconfigured switch exist set connection status 'REMOVED'.
-			// Send delete peer messages to all target peers.
-			// Otherwise, remove switch from db. 
-			if(checkConnectedAny(msg.getIpv4Addr()) >= 1) {
-				// 2 == key removed.
-				updatePeerInfo(msg.getIpv4Addr(), msg.getIpv4Peer(), 2);
-			    constructDeletePeerBadKey(msg.getIpv4Addr());
+			processRevoked(sw, msg);
+		} 
+	}
+	
+	/** 
+	 * Processes the SET_KEY status response sent by the switch.
+	 * Uses the content of the message to query the database and respond accordingly.
+	 * @param sw Instance of a switch connected to the controller.
+	 * @param msg The received OpenFlow DPKM Status message.
+	 */
+	private synchronized void processConfigured(IOFSwitch sw, OFDpkmStatus msg) {
+		log.info(String.format("Switch %s has been configured successfully.", sw.getId().toString()));
+		// Adds the new WG switch to the database.
+		if(checkIPExists(msg.getIpv4Addr()).equals("0")) {
+			writeSwitchToDB(msg, sw);
+			// Checks for and adds any configured switches as peers. 
+			if(checkConfigured() >= 2) {
+				constructAddPeerMessage(sw, msg.getIpv4Addr());
+			}
+			else if(checkConfigured() == 1) {
+				log.info("No Peers to be added.");
 			} else {
-				removeSwitch(msg.getIpv4Addr());
+				log.error("An error was encountered when adding a peer.");
 			}
 		} 
+		// Logs if controller fails to access the database. 
+		else if(checkIPExists(msg.getIpv4Addr()).equals("Error")) {
+			log.error("An error was encountered when adding switch info to DB.");
+		} else {
+			// Updates existing switch details for new configuration. 
+			updateSwitchInDB(msg,sw);
+			
+			// If switch has peers then deletes peer on one or both interfaces based on state.
+			if(checkConnectedAny(msg.getIpv4Addr()) > 0) {
+				String ipv4 = msg.getIpv4Addr();
+				Iterator<DpkmPeers> iter = getPeers().iterator();
+				// Loop through peer connections.
+				while (iter.hasNext()) {
+					DpkmPeers p = iter.next();
+					// If status is switch A key changed then
+					if (checkConnected(ipv4, p.ipv4AddrB, 1) > 0) {
+						// update to 'PID1ONLY' (for later use),
+						updatePeerInfo(ipv4, p.ipv4AddrB, 4);
+						// remove switch A old key from switch B.
+						sendDeletePeerMessage(p.dpidB, p.dpidA, true);
+					}
+					// If status is switch B key changed then
+					else if (checkConnected(p.ipv4AddrA, ipv4, 1) > 0) {
+						// update to 'PID1ONLY' (for later use),
+						updatePeerInfo(p.ipv4AddrA, ipv4, 4);
+						// remove switch B old key from switch A.
+						sendDeletePeerMessage(p.dpidA, p.dpidB, true);
+					}
+					// If status is both keys changed then
+					else if (checkConnected(ipv4, p.ipv4AddrB, 6) > 0) {
+						// update to 'BOTH REMOVED' (for later use),
+						updatePeerInfo(ipv4, p.ipv4AddrB, 7);
+						// remove old keys from both interfaces. 
+						sendDeletePeerMessage(p.dpidA, p.dpidB, true);
+						sendDeletePeerMessage(p.dpidB, p.dpidA, true);
+					}
+				}
+				
+			}
+			else if(checkConfigured() == 1) {
+				log.info("No other WG configured switches in the DB. ");
+			}
+		}
+	}
+	
+	/** 
+	 * Processes the ADD_PEER status response sent by the switch.
+	 * Uses the content of the message to query the database and respond accordingly.
+	 * @param sw Instance of a switch connected to the controller.
+	 * @param msg The received OpenFlow DPKM Status message.
+	 */
+	private synchronized void processPeerAdded(IOFSwitch sw, OFDpkmStatus msg) {
+		log.info(String.format("Switch %s has successfully added %s as a WG peer.", 
+				sw.getId().toString(), getDpId(msg.getIpv4Peer())));
+		// If connection is 'PID1ONLY' (4) only one switch has established connection.
+		// Sends an add peer message to target peer, adding peer info to both WG interfaces.
+		if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 4) > 0) {
+			sendAddPeerMessage(getDpId(msg.getIpv4Peer()), sw.getId().toString());
+		}
+		// If connection is established on both, update peer connection status. 
+		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 5) > 0) {
+			// 0 == CONNECTED. 
+			updatePeerInfo(msg.getIpv4Addr(), msg.getIpv4Peer(), 0);
+		} 
+		// If connection is 'CONNECTED' on both, confirm success.
+		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 0) > 0) {
+			log.info(String.format("Full connection established between switch %s and switch %s.", 
+					sw.getId().toString(), getDpId(msg.getIpv4Peer())));
+		} else {
+			log.error("An error was encountered when adding peer info to DB.");
+		}
+	}
+	
+	/** 
+	 * Processes the DELETE_PEER status response sent by the switch.
+	 * Uses the content of the message to query the database and respond accordingly.
+	 * @param sw Instance of a switch connected to the controller.
+	 * @param msg The received OpenFlow DPKM Status message.
+	 */
+	private synchronized void processPeerRemoved(IOFSwitch sw, OFDpkmStatus msg) {
+		log.info(String.format("Switch %s has successfully removed %s as a WG peer.", 
+				sw.getId().toString(), getDpId(msg.getIpv4Peer())));
+		// Remove connection if exists and status 'REMOVED' (key removed).
+		if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 2) > 0) {
+			removePeerConnection(msg);
+			// Remove switch if no remaining peer connections.
+			if(checkConnectedAny(msg.getIpv4Peer()) == 0) {
+				removeSwitch(msg.getIpv4Peer());
+			}
+		}
+		// Called if a new connection has been added (PID1ONLY) whilst awaiting second
+		// DELETE_PEER message response. 
+		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 4) > 0) {
+			// Re-add other half of the peer connections with new key.
+			sendAddPeerMessage(sw.getId().toString(), getDpId(msg.getIpv4Peer()));
+		}
+		// Called if connection is removed from both interfaces (BOTH REMOVED), but should
+		// be rebuilt. 
+		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 7) > 0) {
+			sendAddPeerMessage(sw.getId().toString(), getDpId(msg.getIpv4Peer()));
+		}
+		// Sends delete peer message to target peer, deleting peer info on both WG interfaces. (if exists).
+		// Removes connection from db. 
+		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 0) > 0) {
+			sendDeletePeerMessage(getDpId(msg.getIpv4Peer()), sw.getId().toString(), false);
+			removePeerConnection(msg);
+		}
+		// Connection removed from both switches. 
+		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 0) == 0) {
+			log.info("Peer removed from both switches.");
+		}
+	}
+	
+	/** 
+	 * Processes the DELETE_KEY status response sent by the switch.
+	 * Uses the content of the message to query the database and respond accordingly.
+	 * @param sw Instance of a switch connected to the controller.
+	 * @param msg The received OpenFlow DPKM Status message.
+	 */
+	private synchronized void processRevoked(IOFSwitch sw, OFDpkmStatus msg) {
+		log.info(String.format("Switch %s has successfully deleted it's key.", sw.getId().toString()));
+		// If connections to unconfigured switch exist set connection status 'REMOVED'.
+		// Send delete peer messages to all target peers.
+		// Otherwise, remove switch from db. 
+		if(checkConnectedAny(msg.getIpv4Addr()) >= 1) {
+			// 2 == key removed.
+			updatePeerInfo(msg.getIpv4Addr(), msg.getIpv4Peer(), 2);
+			Iterator<DpkmPeers> iter = getPeers().iterator();
+			while (iter.hasNext()) {
+				DpkmPeers p = iter.next();
+				if (p.ipv4AddrA.equalsIgnoreCase(msg.getIpv4Addr())) {
+					sendDeletePeerMessage(p.dpidB, p.dpidA, false);
+				}
+				if (p.ipv4AddrB.equalsIgnoreCase(msg.getIpv4Addr())) {
+					sendDeletePeerMessage(p.dpidA, p.dpidB, false);
+				}
+			}
+		} else {
+			removeSwitch(msg.getIpv4Addr());
+		}
 	}
 	
 	/** 
@@ -326,9 +401,8 @@ public class DpkmConfigureWG extends Dpkm implements IFloodlightModule, IDpkmCon
 			OFDpkmSetKey setKeyMsg = sw.getOFFactory().buildDpkmSetKey()
 					.build();
 			sw.write(setKeyMsg);
-			log.info(String.format("DPKM_SET_KEY message sent to switch %s", dpid.toString()));
 		} catch(Exception e) {
-			System.out.println("NullPointerException Thrown!");
+			e.printStackTrace();;
 			log.error("Unable to send DPKM_SET_KEY message.");
 		}
 	}
@@ -346,9 +420,8 @@ public class DpkmConfigureWG extends Dpkm implements IFloodlightModule, IDpkmCon
 			OFDpkmDeleteKey delKeyMsg = sw.getOFFactory().buildDpkmDeleteKey()
 					.build();
 			sw.write(delKeyMsg);
-			log.info(String.format("DPKM_DELETE_KEY message sent to switch %s", dpid.toString()));
 		} catch(Exception e) {
-			System.out.println("NullPointerException Thrown!");
+			e.printStackTrace();
 			log.error("Unable to send DPKM_DELETE_KEY message.");
 		}
 	}
@@ -564,8 +637,8 @@ public class DpkmConfigureWG extends Dpkm implements IFloodlightModule, IDpkmCon
 					.setBufferId(OFBufferId.NO_BUFFER)
 					.setHardTimeout(0)
 					.setIdleTimeout(0)
-					.setPriority(32768)
-					.setTableId(TableId.of(2))
+					.setPriority(20000)
+					//.setTableId(TableId.of(2))
 					.setMatch(dpkmMatchA)
 					.setInstructions(instructionList)
 					.build();
@@ -573,8 +646,8 @@ public class DpkmConfigureWG extends Dpkm implements IFloodlightModule, IDpkmCon
 					.setBufferId(OFBufferId.NO_BUFFER)
 					.setHardTimeout(0)
 					.setIdleTimeout(0)
-					.setPriority(32768)
-					.setTableId(TableId.of(3))
+					.setPriority(20000)
+					//.setTableId(TableId.of(3))
 					.setMatch(dpkmMatchB)
 					.setInstructions(instructionList)
 					.build();
@@ -591,10 +664,37 @@ public class DpkmConfigureWG extends Dpkm implements IFloodlightModule, IDpkmCon
 		}
     }
     
-    public void rekey(String dpid, int cryptoperiod) {
+    /** 
+	 * Rekey's the switch after expiry of the given cryptoperiod.
+	 * This consists of reconfiguring the switch using a DPKM_SET_KEY message.   
+	 * @param dpid DatapathId of the switch. 
+	 * @param cryptoperiod Life span of the key in seconds.  
+	 */
+    @Override
+    public synchronized void rekey(String dpid, int cryptoperiod) {
     	try {
     		//TODO: Fix Queue packets, use meters instead.
     		//queuePackets(dpid);
+    		IOFSwitch sw = switchService.getSwitch(DatapathId.of(dpid));
+    		if(!getIp(sw).equalsIgnoreCase("Error")) {
+    			String ipv4 = getIp(sw);
+    			if(checkConnectedAny(ipv4) > 0) {
+    				Iterator<DpkmPeers> iter = getPeers().iterator();
+    				while (iter.hasNext()) {
+    					DpkmPeers p = iter.next();
+    					if (p.ipv4AddrA.equalsIgnoreCase(ipv4) || p.ipv4AddrB.equalsIgnoreCase(ipv4)) {
+    						if (checkConnected(p.ipv4AddrA, p.ipv4AddrB, 1) > 0) {
+    							// 6 == both keys changed.
+    							updatePeerInfo(p.ipv4AddrA, p.ipv4AddrB, 6);
+    						} else {
+    							// 1 == key changed.
+    							updatePeerInfo(p.ipv4AddrA, p.ipv4AddrB, 1);
+    						}
+    					}
+    					
+    				}
+    			}
+    		}
     		sendSetKeyMessage(DatapathId.of(dpid), cryptoperiod);
     		//deQueuePackets(dpid);
     	} catch(Exception e) {

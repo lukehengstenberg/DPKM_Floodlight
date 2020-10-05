@@ -6,6 +6,13 @@ import org.restlet.routing.Router;
  
 import net.floodlightcontroller.restserver.RestletRoutable;
 
+/** 
+ * Registers the DPKM REST resources with the controller and assigns 
+ * paths that can be used to externally call the APIs. 
+ * 
+ * @author Luke Hengstenberg 
+ * @version 1.0
+ */
 public class DpkmConfigureWGWebRoutable implements RestletRoutable {
 	@Override
     public Restlet getRestlet(Context context) {
