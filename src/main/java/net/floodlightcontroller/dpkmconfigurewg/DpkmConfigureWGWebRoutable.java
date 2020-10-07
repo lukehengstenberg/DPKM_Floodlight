@@ -24,6 +24,7 @@ public class DpkmConfigureWGWebRoutable implements RestletRoutable {
         router.attach("/add/peer/json", DpkmManagePeerResource.class);
         router.attach("/delete/peer/json", DpkmManagePeerResource.class);
         router.attach("/start/json", DpkmStartCommunicationResource.class);
+        router.attach("/end/json", DpkmEndCommunicationResource.class);
         router.attach("/rekey/json", DpkmRekeyResource.class);
         return router;
     }

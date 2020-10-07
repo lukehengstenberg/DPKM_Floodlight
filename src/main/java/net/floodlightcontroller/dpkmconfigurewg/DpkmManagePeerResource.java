@@ -184,6 +184,14 @@ public class DpkmManagePeerResource extends ServerResource {
 						//TODO should return some error message via HTTP message
 					}
 				}
+				else if (n.equalsIgnoreCase("endType")) {
+					try {
+						peers.status = jp.getText();
+					} catch (IllegalArgumentException e) {
+						log.error("Unable to parse end type: {}", jp.getText());
+						//TODO should return some error message via HTTP message
+					}
+				}
 			}
 		} catch (IOException e) {
 			log.error("Unable to parse JSON string: {}", e);

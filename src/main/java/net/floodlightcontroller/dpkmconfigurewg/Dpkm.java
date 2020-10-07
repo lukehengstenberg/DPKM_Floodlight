@@ -101,7 +101,7 @@ public class Dpkm {
 	 */
 	protected void sendAddPeerMessageInternal(IOFSwitch sw, String peerPubKey, String peerIPv4, String peerIPv4WG) {
 		try {
-			String sourceIPv4 = getIp(sw);
+			String sourceIPv4 = getIp(sw, false);
 		    // If no connection exists add new record with status 'PID1ONLY'.
 		    // Otherwise, update connection to status 'BOTH'. 
 		    if(checkConnected(sourceIPv4, peerIPv4, 0) == 0) {
@@ -183,9 +183,13 @@ public class Dpkm {
 	 * @param sw IOFSwitch instance of a switch.
 	 * @return String Ipv4 address of a switch or error.
 	 */
-	protected String getIp(IOFSwitch sw) {
+	protected String getIp(IOFSwitch sw, boolean wg) {
 		String getSQL = String.format("SELECT IPv4Addr FROM ConfiguredPeers WHERE Status = 'CONFIGURED' "
 				+ "AND Dpid = '%s';",sw.getId().toString());
+		if(wg) {
+			getSQL = String.format("SELECT IPv4AddrWG FROM ConfiguredPeers WHERE Status = 'CONFIGURED' "
+					+ "AND Dpid = '%s';",sw.getId().toString());
+		}
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
 				PreparedStatement getIp = connect.prepareStatement(getSQL);) {

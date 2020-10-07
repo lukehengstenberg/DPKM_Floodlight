@@ -97,6 +97,16 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
     public void startCommunication(String dpidA, String dpidB);
     
     /** 
+	 * Writes a FLOW_MOD message to both peer switches to terminate communication
+	 * entirely or continue communication unencrypted (not through WG). 
+	 * This is decided by the administrator using the top level UI to set endType.   
+	 * @param dpidA DatapathId of peer (switch) A. 
+	 * @param dpidB DatapathId of peer (switch) B.
+	 * @param endType Type of termination (all communication or WG only).  
+	 */
+    public void endCommunication(String dpidA, String dpidB, String endType);
+    
+    /** 
 	 * Rekey's the switch after expiry of the given cryptoperiod.
 	 * This consists of reconfiguring the switch using a DPKM_SET_KEY message.   
 	 * @param dpid DatapathId of the switch. 

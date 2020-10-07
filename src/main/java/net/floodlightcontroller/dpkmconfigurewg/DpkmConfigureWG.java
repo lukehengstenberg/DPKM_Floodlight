@@ -36,6 +36,8 @@ import org.projectfloodlight.openflow.protocol.OFEchoRequest;
 import org.projectfloodlight.openflow.protocol.OFExperimenter;
 import org.projectfloodlight.openflow.protocol.OFFactory;
 import org.projectfloodlight.openflow.protocol.OFFlowAdd;
+import org.projectfloodlight.openflow.protocol.OFFlowDelete;
+import org.projectfloodlight.openflow.protocol.OFFlowModify;
 import org.projectfloodlight.openflow.protocol.OFMessage;
 import org.projectfloodlight.openflow.protocol.OFPacketIn;
 import org.projectfloodlight.openflow.protocol.OFPortDesc;
@@ -104,7 +106,7 @@ import net.floodlightcontroller.util.ConcurrentCircularBuffer;
  * @author Luke Hengstenberg 
  * @version 1.0
  */
-public class DpkmConfigureWG extends Dpkm implements IFloodlightModule, IDpkmConfigureWGService, IOFMessageListener {
+public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDpkmConfigureWGService, IOFMessageListener {
 	protected static Logger log = LoggerFactory.getLogger(DpkmConfigureWG.class);
 	protected IFloodlightProviderService floodlightProvider;
 	protected IOFSwitchService switchService;
@@ -596,62 +598,11 @@ public class DpkmConfigureWG extends Dpkm implements IFloodlightModule, IDpkmCon
     		// Initialise the switches. 
     		IOFSwitch peerA = switchService.getSwitch(DatapathId.of(dpidA));
 			IOFSwitch peerB = switchService.getSwitch(DatapathId.of(dpidB));
-			String ipv4A = getIp(peerA);
-			String ipv4B = getIp(peerB);
-    		// Create match conditions for switches.
-			Match dpkmMatchA = peerA.getOFFactory().buildMatch()
-					.setExact(MatchField.DPKM_METHOD, U8.of((short) 1))
-					.setExact(MatchField.IN_PORT, OFPort.of(1))
-					.setExact(MatchField.ETH_TYPE, EthType.IPv4)
-					.setExact(MatchField.IP_PROTO, IpProtocol.UDP)
-					.setExact(MatchField.UDP_SRC, TransportPort.of(51820))
-					.setExact(MatchField.UDP_DST, TransportPort.of(51820))
-					.setExact(MatchField.IPV4_SRC, IPv4Address.of(ipv4A))
-					.setExact(MatchField.IPV4_DST, IPv4Address.of(ipv4B))
-					.build();
-			Match dpkmMatchB = peerB.getOFFactory().buildMatch()
-					.setExact(MatchField.DPKM_METHOD, U8.of((short) 1))
-					.setExact(MatchField.IN_PORT, OFPort.of(1))
-					.setExact(MatchField.ETH_TYPE, EthType.IPv4)
-					.setExact(MatchField.IP_PROTO, IpProtocol.UDP)
-					.setExact(MatchField.UDP_SRC, TransportPort.of(51820))
-					.setExact(MatchField.UDP_DST, TransportPort.of(51820))
-					.setExact(MatchField.IPV4_SRC, IPv4Address.of(ipv4B))
-					.setExact(MatchField.IPV4_DST, IPv4Address.of(ipv4A))
-					.build();
-			ArrayList<OFAction> actionList = new ArrayList<OFAction>();
-			// Set action as output aka output to port.
-			OFActionOutput action = peerA.getOFFactory().actions().buildOutput()
-					.setMaxLen(0xffFFffFF)
-					.setPort(OFPort.of(1))
-					.build();
-			actionList.add(action);
-			// Write instruction to apply action list to packet on switch end.
-			OFInstructionApplyActions applyActions = peerA.getOFFactory().instructions().buildApplyActions()
-					.setActions(actionList)
-					.build();
-			ArrayList<OFInstruction> instructionList = new ArrayList<OFInstruction>();
-			instructionList.add(applyActions);
-			// Construct FLOW_ADD messages with matches and actions/instructions.
-			OFFlowAdd flowA = peerA.getOFFactory().buildFlowAdd()
-					.setBufferId(OFBufferId.NO_BUFFER)
-					.setHardTimeout(0)
-					.setIdleTimeout(0)
-					.setPriority(20000)
-					//.setTableId(TableId.of(2))
-					.setMatch(dpkmMatchA)
-					.setInstructions(instructionList)
-					.build();
-			OFFlowAdd flowB = peerB.getOFFactory().buildFlowAdd()
-					.setBufferId(OFBufferId.NO_BUFFER)
-					.setHardTimeout(0)
-					.setIdleTimeout(0)
-					.setPriority(20000)
-					//.setTableId(TableId.of(3))
-					.setMatch(dpkmMatchB)
-					.setInstructions(instructionList)
-					.build();
-			// Write FLOW_MOD messages to switches.
+			String ipv4A = getIp(peerA, false);
+			String ipv4B = getIp(peerB, false);
+			OFFlowAdd flowA = constructFlowAdd(peerA, peerB);
+			OFFlowAdd flowB = constructFlowAdd(peerB, peerA);
+			// Write FLOW_MOD (ADD) messages to switches.
 			peerA.write(flowA);
 			peerB.write(flowB);
 			// Update DB status, 3 == start communication.
@@ -662,6 +613,40 @@ public class DpkmConfigureWG extends Dpkm implements IFloodlightModule, IDpkmCon
 			e.printStackTrace();
 			log.error("Failed to access the database when sending FLOW_MOD message.");
 		}
+    }
+    
+    /** 
+	 * Writes a FLOW_MOD message to both peer switches to terminate communication
+	 * entirely or continue communication unencrypted (not through WG). 
+	 * This is decided by the administrator using the top level UI to set endType.   
+	 * @param dpidA DatapathId of peer (switch) A. 
+	 * @param dpidB DatapathId of peer (switch) B.
+	 * @param endType Type of termination (all communication or WG only).  
+	 */
+    @Override
+    public void endCommunication(String dpidA, String dpidB, String endType) {
+    	// Initialise the switches. 
+		IOFSwitch peerA = switchService.getSwitch(DatapathId.of(dpidA));
+		IOFSwitch peerB = switchService.getSwitch(DatapathId.of(dpidB));
+		
+		// Continue communication unencrypted else end all.
+		if(endType.equalsIgnoreCase("endWG")) {
+			OFFlowModify flowA = constructFlowModify(peerA, peerB);
+			OFFlowModify flowB = constructFlowModify(peerB, peerA);
+			// Write FLOW_MOD (MODIFY) messages to switches.
+			peerA.write(flowA);
+			peerB.write(flowB);
+			log.info(String.format("Communication between switch %s and switch %s now unencrypted.",dpidA,dpidB));
+		} else {
+			OFFlowDelete flowA = constructFlowDelete(peerA, peerB);
+			OFFlowDelete flowB = constructFlowDelete(peerB, peerA);
+			// Write FLOW_MOD (DELETE) messages to switches.
+			peerA.write(flowA);
+			peerB.write(flowB);
+			log.info(String.format("Communication between switch %s and switch %s ended.",dpidA,dpidB));
+		}
+		// Delete peer connection one interface at a time.
+		sendDeletePeerMessage(dpidA, dpidB, false);
     }
     
     /** 
@@ -676,8 +661,8 @@ public class DpkmConfigureWG extends Dpkm implements IFloodlightModule, IDpkmCon
     		//TODO: Fix Queue packets, use meters instead.
     		//queuePackets(dpid);
     		IOFSwitch sw = switchService.getSwitch(DatapathId.of(dpid));
-    		if(!getIp(sw).equalsIgnoreCase("Error")) {
-    			String ipv4 = getIp(sw);
+    		if(!getIp(sw,false).equalsIgnoreCase("Error")) {
+    			String ipv4 = getIp(sw,false);
     			if(checkConnectedAny(ipv4) > 0) {
     				Iterator<DpkmPeers> iter = getPeers().iterator();
     				while (iter.hasNext()) {
