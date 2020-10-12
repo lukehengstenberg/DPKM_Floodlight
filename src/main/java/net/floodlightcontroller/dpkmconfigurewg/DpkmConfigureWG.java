@@ -9,9 +9,11 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Timestamp;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -19,6 +21,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ThreadLocalRandom;
 
 import org.projectfloodlight.openflow.protocol.OFDpkmAddPeer;
 import org.projectfloodlight.openflow.protocol.OFDpkmDeleteKey;
@@ -130,7 +133,7 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 	}
 
 	/** 
-	 * Implements a message listener for messages of type experimenter.
+	 * Implements a message listener for messages of type experimenter. </br>
 	 * Executes appropriate functions based on received message subtype.
 	 * @param sw Instance of a switch connected to the controller.
 	 * @param msg The received OpenFlow message.
@@ -198,14 +201,14 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 	}
     
 	/** 
-	 * Processes the status message sent by the switch based on the status flag.
+	 * Processes the status message sent by the switch based on the status flag.</br>
 	 * Calls one of several functions to process based on type of status response.
 	 * @param sw Instance of a switch connected to the controller.
 	 * @param msg The received OpenFlow DPKM Status message.
 	 * @throws IOException.  
 	 */
-	private synchronized void processStatusMessage(IOFSwitch sw, OFDpkmStatus msg) throws IOException {
-		log.info(String.format("A status response was received from switch %s.", sw.getId().toString()));
+	private void processStatusMessage(IOFSwitch sw, OFDpkmStatus msg) throws IOException {
+		//log.info(String.format("A status response was received from switch %s.", sw.getId().toString()));
 		// Executed if the status response shows WG has been configured.
 		if(msg.getStatusFlag() == OFDpkmStatusFlag.DPKM_STATUS_FLAG_CONFIGURED) {
 			processConfigured(sw, msg);
@@ -225,7 +228,7 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 	}
 	
 	/** 
-	 * Processes the SET_KEY status response sent by the switch.
+	 * Processes the SET_KEY status response sent by the switch.</br>
 	 * Uses the content of the message to query the database and respond accordingly.
 	 * @param sw Instance of a switch connected to the controller.
 	 * @param msg The received OpenFlow DPKM Status message.
@@ -291,42 +294,52 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 	}
 	
 	/** 
-	 * Processes the ADD_PEER status response sent by the switch.
+	 * Processes the ADD_PEER status response sent by the switch.</br>
 	 * Uses the content of the message to query the database and respond accordingly.
 	 * @param sw Instance of a switch connected to the controller.
 	 * @param msg The received OpenFlow DPKM Status message.
 	 */
 	private synchronized void processPeerAdded(IOFSwitch sw, OFDpkmStatus msg) {
 		log.info(String.format("Switch %s has successfully added %s as a WG peer.", 
-				sw.getId().toString(), getDpId(msg.getIpv4Peer())));
+				sw.getId().toString(), getDpId(msg.getIpv4Peer(), 0, false)));
 		// If connection is 'PID1ONLY' (4) only one switch has established connection.
 		// Sends an add peer message to target peer, adding peer info to both WG interfaces.
 		if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 4) > 0) {
-			sendAddPeerMessage(getDpId(msg.getIpv4Peer()), sw.getId().toString());
+			sendAddPeerMessage(getDpId(msg.getIpv4Peer(), 0, false), sw.getId().toString());
 		}
 		// If connection is established on both, update peer connection status. 
 		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 5) > 0) {
 			// 0 == CONNECTED. 
 			updatePeerInfo(msg.getIpv4Addr(), msg.getIpv4Peer(), 0);
+			log.info(String.format("Full connection established between switch %s and switch %s.", 
+					sw.getId().toString(), getDpId(msg.getIpv4Peer(), 0, false)));
+			// If connection was communicating, update peer connection status.
+			if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 3) > 0) {
+				// 3 == COMMUNICATING. 
+				updatePeerInfo(msg.getIpv4Addr(), msg.getIpv4Peer(), 3);
+				IOFSwitch peer = switchService.getSwitch(DatapathId.of(getDpId(msg.getIpv4Peer(), 0, false)));
+				// Restore previous flow configuration to continue encryption.
+				handleFlowRekeying(sw, peer, false);
+			} 
 		} 
 		// If connection is 'CONNECTED' on both, confirm success.
 		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 0) > 0) {
 			log.info(String.format("Full connection established between switch %s and switch %s.", 
-					sw.getId().toString(), getDpId(msg.getIpv4Peer())));
+					sw.getId().toString(), getDpId(msg.getIpv4Peer(), 0, false)));
 		} else {
 			log.error("An error was encountered when adding peer info to DB.");
 		}
 	}
 	
 	/** 
-	 * Processes the DELETE_PEER status response sent by the switch.
+	 * Processes the DELETE_PEER status response sent by the switch.</br>
 	 * Uses the content of the message to query the database and respond accordingly.
 	 * @param sw Instance of a switch connected to the controller.
 	 * @param msg The received OpenFlow DPKM Status message.
 	 */
 	private synchronized void processPeerRemoved(IOFSwitch sw, OFDpkmStatus msg) {
 		log.info(String.format("Switch %s has successfully removed %s as a WG peer.", 
-				sw.getId().toString(), getDpId(msg.getIpv4Peer())));
+				sw.getId().toString(), getDpId(msg.getIpv4Peer(), 0, false)));
 		// Remove connection if exists and status 'REMOVED' (key removed).
 		if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 2) > 0) {
 			removePeerConnection(msg);
@@ -339,17 +352,17 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 		// DELETE_PEER message response. 
 		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 4) > 0) {
 			// Re-add other half of the peer connections with new key.
-			sendAddPeerMessage(sw.getId().toString(), getDpId(msg.getIpv4Peer()));
+			sendAddPeerMessage(sw.getId().toString(), getDpId(msg.getIpv4Peer(), 0, false));
 		}
 		// Called if connection is removed from both interfaces (BOTH REMOVED), but should
 		// be rebuilt. 
 		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 7) > 0) {
-			sendAddPeerMessage(sw.getId().toString(), getDpId(msg.getIpv4Peer()));
+			sendAddPeerMessage(sw.getId().toString(), getDpId(msg.getIpv4Peer(), 0, false));
 		}
 		// Sends delete peer message to target peer, deleting peer info on both WG interfaces. (if exists).
 		// Removes connection from db. 
 		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 0) > 0) {
-			sendDeletePeerMessage(getDpId(msg.getIpv4Peer()), sw.getId().toString(), false);
+			sendDeletePeerMessage(getDpId(msg.getIpv4Peer(), 0, false), sw.getId().toString(), false);
 			removePeerConnection(msg);
 		}
 		// Connection removed from both switches. 
@@ -359,7 +372,7 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 	}
 	
 	/** 
-	 * Processes the DELETE_KEY status response sent by the switch.
+	 * Processes the DELETE_KEY status response sent by the switch.</br>
 	 * Uses the content of the message to query the database and respond accordingly.
 	 * @param sw Instance of a switch connected to the controller.
 	 * @param msg The received OpenFlow DPKM Status message.
@@ -389,7 +402,7 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 	
 	/** 
 	 * Writes a DPKM_SET_KEY message to the switch with the given dpid,
-	 * and sets the cryptoperiod.
+	 * and sets the cryptoperiod.</br>
 	 * This triggers the switch to generate the keys, configuring its
 	 * WireGuard interface, returning a DPKM_STATUS or error response message. 
 	 * @param dpid DatapathId of the switch. 
@@ -410,7 +423,7 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 	}
 	
 	/** 
-	 * Writes a DPKM_DELETE_KEY message to the switch with the given dpid.
+	 * Writes a DPKM_DELETE_KEY message to the switch with the given dpid. </br>
 	 * This triggers the switch to delete its keys, unconfiguring WireGuard,
 	 * returning a DPKM_STATUS or error response message.
 	 * @param dpid DatapathId of the switch.  
@@ -515,7 +528,7 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 	
 	/** 
 	 * Writes a DPKM_ADD_PEER message to the switch with the given source dpid,
-	 * adding the switch with the given target dpid as a peer.
+	 * adding the switch with the given target dpid as a peer.</br>
 	 * This triggers the switch to add the peer info to its WireGuard interface, 
 	 * returning a DPKM_STATUS or error response message. 
 	 * @param sourceDpid DatapathId of the switch adding the peer. 
@@ -549,7 +562,7 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 	
 	/** 
 	 * Writes a DPKM_DELETE_PEER message to the switch with the given source dpid,
-	 * removing the switch with the given target dpid as a peer.
+	 * removing the switch with the given target dpid as a peer.</br>
 	 * This triggers the switch to remove the peer info from its WireGuard interface, 
 	 * returning a DPKM_STATUS or error response message. 
 	 * @param sourceDpid DatapathId of the switch removing the peer. 
@@ -588,7 +601,7 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 	
 	/** 
 	 * Writes a FLOW_MOD message to both peer switches to push traffic through WG
-	 * interface in port in accordance to the created flow table entry.
+	 * interface in port in accordance to the created flow table entry.</br>
 	 * This enables packets to be encrypted/decrypted and sent between the interfaces.   
 	 * @param dpidA DatapathId of peer (switch) A. 
 	 * @param dpidB DatapathId of peer (switch) B.  
@@ -617,7 +630,7 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
     
     /** 
 	 * Writes a FLOW_MOD message to both peer switches to terminate communication
-	 * entirely or continue communication unencrypted (not through WG). 
+	 * entirely or continue communication unencrypted (not through WG). </br>
 	 * This is decided by the administrator using the top level UI to set endType.   
 	 * @param dpidA DatapathId of peer (switch) A. 
 	 * @param dpidB DatapathId of peer (switch) B.
@@ -650,7 +663,7 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
     }
     
     /** 
-	 * Rekey's the switch after expiry of the given cryptoperiod.
+	 * Rekey's the switch after expiry of the given cryptoperiod.</br>
 	 * This consists of reconfiguring the switch using a DPKM_SET_KEY message.   
 	 * @param dpid DatapathId of the switch. 
 	 * @param cryptoperiod Life span of the key in seconds.  
@@ -658,8 +671,6 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
     @Override
     public synchronized void rekey(String dpid, int cryptoperiod) {
     	try {
-    		//TODO: Fix Queue packets, use meters instead.
-    		//queuePackets(dpid);
     		IOFSwitch sw = switchService.getSwitch(DatapathId.of(dpid));
     		if(!getIp(sw,false).equalsIgnoreCase("Error")) {
     			String ipv4 = getIp(sw,false);
@@ -674,20 +685,67 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
     						} else {
     							// 1 == key changed.
     							updatePeerInfo(p.ipv4AddrA, p.ipv4AddrB, 1);
+    							// If communicating temporarily redirect flow to normal port.
+    							if (checkConnected(p.ipv4AddrA, p.ipv4AddrB, 3) > 0) {
+    								IOFSwitch peerA = switchService.getSwitch(DatapathId.of(p.dpidA));
+    								IOFSwitch peerB = switchService.getSwitch(DatapathId.of(p.dpidB));
+        							handleFlowRekeying(peerA, peerB, true);
+        						}
     						}
+    						
     					}
     					
     				}
     			}
     		}
     		sendSetKeyMessage(DatapathId.of(dpid), cryptoperiod);
-    		//deQueuePackets(dpid);
     	} catch(Exception e) {
     		e.printStackTrace();
     		log.error("Failed to rekey the switch.");
     	}
     }
+    
+    /** 
+	 * Compromises switch with id to trigger the revocation procedure.</br>
+	 * This updates the db record and ends all communication with the switch.  
+	 * @param id Integer value of switch record in db.   
+	 */
+    @Override
+    public void compromiseNode(int id) {
+    	updateSwitchCompromised(id);
+    	IOFSwitch sw = switchService.getSwitch(DatapathId.of(getDpId(" ",id,true)));
+    	String ipv4 = getIp(sw,false);
+    	if(checkConnectedAny(ipv4) > 0) {
+    		Iterator<DpkmPeers> iter = getPeers().iterator();
+			while (iter.hasNext()) {
+				DpkmPeers p = iter.next();
+				if (p.ipv4AddrA.equalsIgnoreCase(ipv4) || p.ipv4AddrB.equalsIgnoreCase(ipv4)) {
+					endCommunication(p.dpidA, p.dpidB, "endAll");
+				}
+			}
+    	}
+    }
 	
+    /** 
+	 * Carries out the revocation procedure for a compromised switch dpid.</br>
+	 * Based on the top-level policy this means reconfiguring the switch with 
+	 * a SET_KEY message or terminating the switch with a DELETE_KEY message.
+	 * @param dpid DatapathId of the switch.
+	 * @param revType Revocation type either reconfigure or terminate switch.   
+	 */
+    @Override
+    public void revoke(String dpid, String revType) {
+    	// Reconfigure the compromised node else terminate completely.
+    	if(revType.equalsIgnoreCase("reConf")) {
+    		int cryptoperiod = getCryptoperiod(dpid);
+    		if(cryptoperiod != -1) {
+    			sendSetKeyMessage(DatapathId.of(dpid), cryptoperiod);
+    		}
+    	} else {
+    		sendDeleteKeyMessage(DatapathId.of(dpid));
+    	}
+    }
+    
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleServices() {
 		Collection<Class<? extends IFloodlightService>> l = new ArrayList<Class<? extends IFloodlightService>>();

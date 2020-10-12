@@ -6,6 +6,13 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.util.Properties;
 
+/** 
+ * Provides a connection to the underlying DPKM database using the credentials
+ * stored in the db.properties file. </br>
+ * 
+ * @author Luke Hengstenberg
+ * @version 1.0
+ */
 public class ConnectionProvider {
 	static Properties prop = getCredentials();
     private static final String url = prop.getProperty("db.url");

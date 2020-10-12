@@ -26,7 +26,7 @@ import com.fasterxml.jackson.databind.MappingJsonFactory;
 
 /** 
  * REST APIs for getting all configured switches, adding/configuring a new switch,
- * and deleting a configured switch. <br>
+ * and deleting a configured switch. </br>
  * Takes json data from UI and deserializes, executing corresponding function.   
  * 
  * @author Luke Hengstenberg 
@@ -49,7 +49,7 @@ public class DpkmConfigureWGResource extends ServerResource {
 	}
 	
 	/** 
-	 * Configures WG interface in the given switch and sets the cryptoperiod.
+	 * Configures WG interface in the given switch and sets the cryptoperiod.</br>
 	 * Deserializes to get dpid and cryptoperiod, sending SET_KEY message on success.
 	 * @param fmJson Json structure containing switch information.  
 	 * @return String status either success or error. 
@@ -71,7 +71,7 @@ public class DpkmConfigureWGResource extends ServerResource {
 	}
 	
 	/** 
-	 * Deletes/unconfigures WG interface for switch matching the given id.
+	 * Deletes/unconfigures WG interface for switch matching the given id.</br>
 	 * Deserializes to get id, finds db record, sending DELETE_KEY message on success.
 	 * @param fmJson Json structure containing switch information.  
 	 * @return String status either success or error. 
@@ -109,7 +109,7 @@ public class DpkmConfigureWGResource extends ServerResource {
 	}
 	
 	/** 
-	 * Converts switch information given in json format to a DpkmSwitch object.
+	 * Converts switch information given in json format to a DpkmSwitch object.</br>
 	 * Maps each json value to a field in DpkmSwitch.
 	 * @param fmJson Json structure containing switch information.  
 	 * @return DpkmSwitch switch object created from json. 
@@ -159,6 +159,14 @@ public class DpkmConfigureWGResource extends ServerResource {
 						node.cryptoperiod = Integer.parseInt(jp.getText());
 					} catch (NumberFormatException e) {
 						log.error("Unable to parse cryptoperiod: {}", jp.getText());
+						//TODO should return some error message via HTTP message
+					}
+				}
+				else if (n.equalsIgnoreCase("revType")) {
+					try {
+						node.status = jp.getText();
+					} catch (IllegalArgumentException e) {
+						log.error("Unable to parse revType: {}", jp.getText());
 						//TODO should return some error message via HTTP message
 					}
 				}

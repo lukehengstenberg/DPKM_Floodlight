@@ -8,7 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** 
- * REST API for ending communication between two connected peers. <br>
+ * REST API for ending communication between two connected peers. </br>
  * Takes json data from UI and deserializes, executing endCommunication to 
  * terminate all or WG only communication depending on the top level preference.   
  * 
@@ -19,8 +19,8 @@ public class DpkmEndCommunicationResource extends ServerResource {
 	protected static Logger log = LoggerFactory.getLogger(DpkmConfigureWGResource.class);
 	
 	/** 
-	 * Ends communication for connection with matching peer information in json.
-	 * Deserializes to get both peer switch information and end type.
+	 * Ends communication for connection with matching peer information in json.</br>
+	 * Deserializes to get both peer switch information and end type.</br>
 	 * Either removes flow entirely or modifies flow to continue unencrypted.
 	 * @param fmJson Json structure containing peer information.  
 	 * @return String status either success or error. 
@@ -31,10 +31,12 @@ public class DpkmEndCommunicationResource extends ServerResource {
 				(IDpkmConfigureWGService)getContext().getAttributes()
 				.get(IDpkmConfigureWGService.class.getCanonicalName());
 		DpkmPeers peers = DpkmManagePeerResource.jsonToDpkmPeer(fmJson);
-		if (peers == null) {
-			return "{\"status\" : \"Error! Could not parse switch info, see log for details.\"}";
-		}
 		String status = null;
+		if (peers == null) {
+			status = "Error! Could not parse switch info, see log for details.";
+			log.error(status);
+			return ("{\"status\" : \"" + status + "\"}");
+		}
 		boolean exists = false;
 		Iterator<DpkmPeers> iter = configureWG.getPeers().iterator();
 		while (iter.hasNext()) {

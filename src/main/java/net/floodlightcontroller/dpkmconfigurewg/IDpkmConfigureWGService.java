@@ -8,7 +8,7 @@ import net.floodlightcontroller.core.module.IFloodlightService;
 
 /** 
  * Defines the abstract functions for configuring WireGuard and provides a service
- * for linking the REST APIs to methods in the module dpkmconfigurewg. <br>
+ * for linking the REST APIs to methods in the module dpkmconfigurewg. </br>
  * Important interface to add services to the underlying module through extending
  * the base IFloodlightService class. 
  * 
@@ -26,7 +26,7 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
 	
 	/** 
 	 * Writes a DPKM_SET_KEY message to the switch with the given dpid,
-	 * and sets the cryptoperiod.
+	 * and sets the cryptoperiod.</br>
 	 * This triggers the switch to generate the keys, configuring its
 	 * WireGuard interface, returning a DPKM_STATUS or error response message. 
 	 * @param dpid DatapathId of the switch. 
@@ -35,7 +35,7 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
     public void sendSetKeyMessage (DatapathId dpid, int cryptoperiod);
     
     /** 
-	 * Writes a DPKM_DELETE_KEY message to the switch with the given dpid.
+	 * Writes a DPKM_DELETE_KEY message to the switch with the given dpid.</br>
 	 * This triggers the switch to delete its keys, unconfiguring WireGuard,
 	 * returning a DPKM_STATUS or error response message.
 	 * @param dpid DatapathId of the switch.  
@@ -50,15 +50,15 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
     public List<DpkmPeers> getPeers ();
     
     /** 
-	 * Returns count of peer connections using SQL queries based on statusType or -1 if error.
-	 * Default: count of connections between ipv4AddrA and ipv4AddrB.
-	 * statusType(1): count of connections with the status 'KEY CHANGED'.
-	 * statusType(2): count of connections with the status 'REMOVED'.
-	 * statusType(3): count of connections with the status 'COMMUNICATING'.
-	 * statusType(4): count of connections with the status 'PID1ONLY'.
-	 * statusType(5): count of connections with the status 'BOTH'.
-	 * statusType(6): count of connections with the status 'BOTH CHANGED'.
-	 * statusType(7): count of connections with the status 'BOTH REMOVED'.
+	 * Returns count of peer connections using SQL queries based on statusType or -1 if error.</br>
+	 * Default: count of connections between ipv4AddrA and ipv4AddrB.</br>
+	 * statusType(1): count of connections with the status 'KEY CHANGED'.</br>
+	 * statusType(2): count of connections with the status 'REMOVED'.</br>
+	 * statusType(3): count of connections with communicating TRUE.</br>
+	 * statusType(4): count of connections with the status 'PID1ONLY'.</br>
+	 * statusType(5): count of connections with the status 'BOTH'.</br>
+	 * statusType(6): count of connections with the status 'BOTH CHANGED'.</br>
+	 * statusType(7): count of connections with the status 'BOTH REMOVED'.</br>
 	 * Used internally for a number of conditional statements.  
 	 * @param ipv4AddrA IPv4 Address of a switch 'A'.
 	 * @param ipv4AddrB IPv4 Address of a switch 'B'.
@@ -69,7 +69,7 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
     
     /** 
 	 * Writes a DPKM_ADD_PEER message to the switch with the given source dpid,
-	 * adding the switch with the given target dpid as a peer.
+	 * adding the switch with the given target dpid as a peer.</br>
 	 * This triggers the switch to add the peer info to its WireGuard interface, 
 	 * returning a DPKM_STATUS or error response message. 
 	 * @param sourceDpid DatapathId of the switch adding the peer. 
@@ -79,7 +79,7 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
     
     /** 
 	 * Writes a DPKM_DELETE_PEER message to the switch with the given source dpid,
-	 * removing the switch with the given target dpid as a peer.
+	 * removing the switch with the given target dpid as a peer.</br>
 	 * This triggers the switch to remove the peer info from its WireGuard interface, 
 	 * returning a DPKM_STATUS or error response message. 
 	 * @param sourceDpid DatapathId of the switch removing the peer. 
@@ -89,7 +89,7 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
     
     /** 
 	 * Writes a FLOW_MOD message to both peer switches to push traffic through WG
-	 * interface in port in accordance to the created flow table entry.
+	 * interface in port in accordance to the created flow table entry.</br>
 	 * This enables packets to be encrypted/decrypted and sent between the interfaces.   
 	 * @param dpidA DatapathId of peer (switch) A. 
 	 * @param dpidB DatapathId of peer (switch) B.  
@@ -98,7 +98,7 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
     
     /** 
 	 * Writes a FLOW_MOD message to both peer switches to terminate communication
-	 * entirely or continue communication unencrypted (not through WG). 
+	 * entirely or continue communication unencrypted (not through WG). </br>
 	 * This is decided by the administrator using the top level UI to set endType.   
 	 * @param dpidA DatapathId of peer (switch) A. 
 	 * @param dpidB DatapathId of peer (switch) B.
@@ -107,10 +107,35 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
     public void endCommunication(String dpidA, String dpidB, String endType);
     
     /** 
-	 * Rekey's the switch after expiry of the given cryptoperiod.
+	 * Rekey's the switch after expiry of the given cryptoperiod.</br>
 	 * This consists of reconfiguring the switch using a DPKM_SET_KEY message.   
 	 * @param dpid DatapathId of the switch. 
 	 * @param cryptoperiod Life span of the key in seconds.  
 	 */
     public void rekey(String dpid, int cryptoperiod);
+    
+    /** 
+	 * Compromises switch with id to trigger the revocation procedure.</br>
+	 * This updates the db record and ends all communication with the switch.</br>
+	 * In reality this method is triggered by some third party security software.
+	 * @param id Integer value of switch record in db.   
+	 */
+    public void compromiseNode(int id);
+    
+    /** 
+	 * Returns boolean compromised for the switch with dpid. 
+	 * @param dpid DatapathId of the switch.
+	 * @return boolean value in compromised field of switch or true by default 
+	 * 		   to prevent actions against non-existent switch.
+	 */
+    public boolean checkCompromised(String dpid);
+    
+    /** 
+	 * Carries out the revocation procedure for a compromised switch dpid.</br>
+	 * Based on the top-level policy this means reconfiguring the switch with 
+	 * a SET_KEY message or terminating the switch with a DELETE_KEY message.
+	 * @param dpid DatapathId of the switch.
+	 * @param revType Revocation type either reconfigure or terminate switch.   
+	 */
+    public void revoke(String dpid, String revType);
 }

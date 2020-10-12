@@ -8,7 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** 
- * REST API for starting communication between two connected peers. <br>
+ * REST API for starting communication between two connected peers. </br>
  * Takes json data from UI and deserializes, executing startCommunication function.   
  * 
  * @author Luke Hengstenberg 
@@ -18,7 +18,7 @@ public class DpkmStartCommunicationResource extends ServerResource {
 	protected static Logger log = LoggerFactory.getLogger(DpkmConfigureWGResource.class);
 	
 	/** 
-	 * Starts communication for connection with matching peer information in json.
+	 * Starts communication for connection with matching peer information in json.</br>
 	 * Deserializes to get both peer switch information, sending FLOW_ADD messages on success.
 	 * @param fmJson Json structure containing peer information.  
 	 * @return String status either success or error. 

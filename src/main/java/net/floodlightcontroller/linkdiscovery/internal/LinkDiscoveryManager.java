@@ -322,14 +322,14 @@ IFloodlightModule, IInfoProvider {
 		// It's evil to overwrite port object. The the old code always
 		// overwrote mac address, we now only overwrite zero macs and
 		// log a warning, mostly for paranoia.
-		byte[] srcMac = ofpPort.getHwAddr().getBytes();
-		byte[] zeroMac = { 0, 0, 0, 0, 0, 0 };
-		if (Arrays.equals(srcMac, zeroMac)) {
-			log.warn("Port {}/{} has zero hardware address"
-					+ "overwrite with lower 6 bytes of dpid",
-					dpid.toString(), ofpPort.getPortNo().getPortNumber());
-			System.arraycopy(dpidArray, 2, srcMac, 0, 6);
-		}
+//		byte[] srcMac = ofpPort.getHwAddr().getBytes();
+//		byte[] zeroMac = { 0, 0, 0, 0, 0, 0 };
+//		if (Arrays.equals(srcMac, zeroMac)) {
+//			log.warn("Port {}/{} has zero hardware address"
+//					+ "overwrite with lower 6 bytes of dpid",
+//					dpid.toString(), ofpPort.getPortNo().getPortNumber());
+//			System.arraycopy(dpidArray, 2, srcMac, 0, 6);
+//		}
 
 		// set the portId to the outgoing port
 		portBB.putShort(port.getShortPortNumber());

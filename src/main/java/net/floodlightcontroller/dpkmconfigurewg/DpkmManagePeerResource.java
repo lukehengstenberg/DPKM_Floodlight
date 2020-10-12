@@ -18,7 +18,7 @@ import com.fasterxml.jackson.databind.MappingJsonFactory;
 
 
 /** 
- * REST APIs for retrieving peers and adding/deleting a peer connection. <br>
+ * REST APIs for retrieving peers and adding/deleting a peer connection. </br>
  * Takes json data from UI and deserializes, executing corresponding function.   
  * 
  * @author Luke Hengstenberg 
@@ -40,7 +40,7 @@ public class DpkmManagePeerResource extends ServerResource {
     }
 	
     /** 
-	 * Adds a new peer connection for the switch information in the given json.
+	 * Adds a new peer connection for the switch information in the given json.</br>
 	 * Deserializes to get both peer switch information, sending ADD_PEER message on success.
 	 * @param fmJson Json structure containing switch information.  
 	 * @return String status either success or error. 
@@ -74,7 +74,7 @@ public class DpkmManagePeerResource extends ServerResource {
     }
     
     /** 
-	 * Deletes a peer connection for db record matching the id in the json.
+	 * Deletes a peer connection for db record matching the id in the json.</br>
 	 * Deserializes to get id, finds db record, sending DELETE_PEER message on success.
 	 * @param fmJson Json structure containing peer information.  
 	 * @return String status either success or error. 
@@ -115,7 +115,7 @@ public class DpkmManagePeerResource extends ServerResource {
     }
     
     /** 
-	 * Converts peer information given in json format to a DpkmPeers object.
+	 * Converts peer information given in json format to a DpkmPeers object.</br>
 	 * Maps each json value to a field in DpkmPeers.
 	 * @param fmJson Json structure containing peer information.  
 	 * @return DpkmPeers switch peer object created from json. 
