@@ -62,7 +62,8 @@ public class Dpkm {
     protected static Logger log = LoggerFactory.getLogger(DpkmConfigureWGResource.class);
     
 	/** 
-	 * Writes a DPKM_ADD_PEER message to the given switch sw for any configured switches in db. </br>
+	 * Writes a DPKM_ADD_PEER message to the given switch sw for any configured 
+	 * switches in db. </br>
 	 * This triggers the switch to add the peer info to its WireGuard interface, 
 	 * returning a DPKM_STATUS or error response message. </br>
 	 * Used internally to automatically add configured switches as peers. 
@@ -71,7 +72,8 @@ public class Dpkm {
 	 */
 	protected void constructAddPeerMessage(IOFSwitch sw, String ipv4Addr) {
 		String getCred = String.format("SELECT PubKey1, IPv4Addr, IPv4AddrWG "
-				+ "FROM cntrldb.ConfiguredPeers WHERE Status='CONFIGURED' AND IPv4Addr != '%s';", ipv4Addr);
+				+ "FROM cntrldb.ConfiguredPeers WHERE Status='CONFIGURED' AND "
+				+ "IPv4Addr != '%s';", ipv4Addr);
 		// Connects to the database and executes the SQL statement. 
 		try(Connection connect = ConnectionProvider.getConn();
 				PreparedStatement peerInfo = connect.prepareStatement(getCred);) {
@@ -80,14 +82,14 @@ public class Dpkm {
 	    		try (ResultSet rs = peerInfo.getResultSet()) {
 	    			while (rs.next()) {
 	    				// Calls internal function to build and write message.
-	    				sendAddPeerMessageInternal(sw, rs.getString("PubKey1"),rs.getString("IPv4Addr"),rs.getString("IPv4AddrWG"));
+	    				sendAddPeerMessageInternal(sw, rs.getString("PubKey1"),
+	    						rs.getString("IPv4Addr"),rs.getString("IPv4AddrWG"));
 	    			}
 	    			isResult = peerInfo.getMoreResults();
 	    		}
 	    	} while (isResult);
 	    	connect.close();
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
@@ -102,9 +104,10 @@ public class Dpkm {
 	 * @param peerIPv4 IPv4 Address of the peer to be added.
 	 * @param peerIPv4WG WireGuard Address of the peer to be added. 
 	 */
-	protected void sendAddPeerMessageInternal(IOFSwitch sw, String peerPubKey, String peerIPv4, String peerIPv4WG) {
+	protected void sendAddPeerMessageInternal(IOFSwitch sw, String peerPubKey, 
+			String peerIPv4, String peerIPv4WG) {
 		try {
-			String sourceIPv4 = getIp(sw, false);
+			String sourceIPv4 = getIp(sw.getId().toString(), false);
 		    // If no connection exists add new record with status 'PID1ONLY'.
 		    // Otherwise, update connection to status 'BOTH'. 
 		    if(checkConnected(sourceIPv4, peerIPv4, 0) == 0) {
@@ -125,7 +128,6 @@ public class Dpkm {
 		}
 		catch(Exception e) {
 			e.printStackTrace();
-			System.out.println("Exception Thrown at sendAddPeerMessage.");
 		}
 	}
 	
@@ -139,7 +141,8 @@ public class Dpkm {
 	 * @param peerIPv4 IPv4 Address of the peer to be removed.
 	 * @param peerIPv4WG WireGuard Address of the peer to be removed. 
 	 */
-	protected void sendDeletePeerMessageInternal(IOFSwitch sw, String peerPubKey, String peerIPv4, String peerIPv4WG) {
+	protected void sendDeletePeerMessageInternal(IOFSwitch sw, String peerPubKey, 
+			String peerIPv4, String peerIPv4WG) {
 		try {
 		    OFDpkmDeletePeer deletePeerMsg = sw.getOFFactory().buildDpkmDeletePeer()
 		    		.setKey(peerPubKey)
@@ -148,22 +151,25 @@ public class Dpkm {
 				    .build();
 		    sw.write(deletePeerMsg);
 		}
-		catch(NullPointerException e) {
-			System.out.println("NullPointerException Thrown at sendDeletePeerMessage.");
+		catch(Exception e) {
+			e.printStackTrace();
 		}
 	}
 	
 	/** 
-	 * Returns the DatapathId of switch with address ipv4Addr or matching id from db or Error.
+	 * Returns the DatapathId of switch with address ipv4Addr or matching id 
+	 * from db or Error.
 	 * @param ipv4Addr IPv4 Address of a switch.
 	 * @param id Integer id of db record.
 	 * @param isId Boolean to choose SQL statement (true=id). 
 	 * @return String DatapathId of a switch or error.
 	 */
 	protected String getDpId(String ipv4Addr, int id, boolean isId) {
-		String getDpidSQL = String.format("SELECT Dpid FROM ConfiguredPeers WHERE IPv4Addr = '%s';",ipv4Addr);
+		String getDpidSQL = String.format("SELECT Dpid FROM ConfiguredPeers WHERE "
+				+ "IPv4Addr = '%s';",ipv4Addr);
 		if(isId) {
-			getDpidSQL = String.format("SELECT Dpid FROM ConfiguredPeers WHERE id = '%s';",id);
+			getDpidSQL = String.format("SELECT Dpid FROM ConfiguredPeers WHERE "
+					+ "id = '%s';",id);
 		}
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
@@ -179,25 +185,23 @@ public class Dpkm {
 	    	} while (isResult);
 	    	connect.close();
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
-			return("Error");
 		}
     	return("Error");
 	}
 	
 	/** 
 	 * Returns the Ipv4 Address or WireGuard address of switch sw from db or Error. 
-	 * @param sw IOFSwitch instance of a switch.
+	 * @param dpid DatapathId of a switch.
 	 * @param wg Boolean to choose SQL statement (true=WG).
 	 * @return String Ipv4 address of a switch or error.
 	 */
-	protected String getIp(IOFSwitch sw, boolean wg) {
+	protected String getIp(String dpid, boolean wg) {
 		String getSQL = String.format("SELECT IPv4Addr FROM ConfiguredPeers WHERE "
-				+ "Dpid = '%s';",sw.getId().toString());
+				+ "Dpid = '%s';",dpid);
 		if(wg) {
 			getSQL = String.format("SELECT IPv4AddrWG FROM ConfiguredPeers WHERE "
-					+ "Dpid = '%s';",sw.getId().toString());
+					+ "Dpid = '%s';",dpid);
 		}
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
@@ -213,9 +217,7 @@ public class Dpkm {
 	    	} while (isResult);
 	    	connect.close();
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
-			return("Error");
 		}
     	return("Error");
 	}
@@ -226,7 +228,8 @@ public class Dpkm {
 	 * @return Integer cryptoperiod or -1 if error.
 	 */
 	protected int getCryptoperiod(String dpid) {
-		String getSQL = String.format("SELECT Cryptoperiod FROM ConfiguredPeers WHERE Dpid = '%s';",dpid);
+		String getSQL = String.format("SELECT Cryptoperiod FROM ConfiguredPeers "
+				+ "WHERE Dpid = '%s';",dpid);
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
 				PreparedStatement get = connect.prepareStatement(getSQL);) {
@@ -241,9 +244,7 @@ public class Dpkm {
 	    	} while (isResult);
 	    	connect.close();
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
-			return -1;
 		}
     	return -1;
 	}
@@ -254,7 +255,8 @@ public class Dpkm {
 	 * @return String Count with address or error.
 	 */
 	protected String checkIPExists(String ipv4Addr) {
-		String checkIP = String.format("SELECT COUNT(*) FROM ConfiguredPeers WHERE IPv4Addr = '%s';",ipv4Addr);
+		String checkIP = String.format("SELECT COUNT(*) FROM ConfiguredPeers "
+				+ "WHERE IPv4Addr = '%s';",ipv4Addr);
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
 				PreparedStatement check = connect.prepareStatement(checkIP);) {
@@ -269,7 +271,6 @@ public class Dpkm {
 	    	} while (isResult);
 	    	connect.close();
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
     	return("Error");
@@ -279,7 +280,8 @@ public class Dpkm {
 	 * @return int Number of switches with status 'CONFIGURED' in db or -1 if error.
 	 */
 	protected int checkConfigured() {
-		String checkConf = ("SELECT COUNT(*) FROM ConfiguredPeers WHERE STATUS = 'CONFIGURED';");
+		String checkConf = ("SELECT COUNT(*) FROM ConfiguredPeers WHERE "
+				+ "STATUS = 'CONFIGURED';");
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
 				PreparedStatement checkStatus = connect.prepareStatement(checkConf);) {
@@ -294,7 +296,6 @@ public class Dpkm {
 	    	} while (isResult);
 	    	connect.close();
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		return -1;
@@ -307,7 +308,8 @@ public class Dpkm {
 	 * 		   to prevent actions against non-existent switch.
 	 */
 	public boolean checkCompromised(String dpid) {
-		String checkComp = String.format("SELECT Compromised FROM ConfiguredPeers WHERE Dpid = '%s';", dpid);
+		String checkComp = String.format("SELECT Compromised FROM ConfiguredPeers "
+				+ "WHERE Dpid = '%s';", dpid);
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
 				PreparedStatement check = connect.prepareStatement(checkComp);) {
@@ -322,14 +324,14 @@ public class Dpkm {
 	    	} while (isResult);
 	    	connect.close();
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		return true;
 	}
 	
 	/** 
-	 * Returns count of peer connections using SQL queries based on statusType or -1 if error. </br>
+	 * Returns count of peer connections using SQL queries based on statusType 
+	 * or -1 if error. </br>
 	 * Default: count of connections between ipv4AddrA and ipv4AddrB. </br>
 	 * statusType(1): count of connections with the status 'KEY CHANGED'.</br>
 	 * statusType(2): count of connections with the status 'REMOVED'.</br>
@@ -437,8 +439,9 @@ public class Dpkm {
 	    	} while (isResult);
 			connect.close();
 		} catch (Exception e) {
-			DpkmConfigureWG.log.error("Failed to access the database when checking peer connections.");
-			return -1;
+			e.printStackTrace();
+			DpkmConfigureWG.log.error("Failed to access the database when "
+					+ "checking peer connections.");
 		}
 		return -1;
 	}
@@ -468,9 +471,36 @@ public class Dpkm {
 	    	} while (isResult);
 	    	connect.close();
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
-			return -1;
+		}
+		return -1;
+	}
+	
+	/** 
+	 * Returns unresolved error count for switch with DatapathId dpid.</br>
+	 * Used internally for a number of conditional statements.  
+	 * @param dpid DatapathId of a switch in string format.
+	 * @return int Error count or -1.
+	 */
+	public int checkError(String dpid) {
+		String checkQ = String.format("SELECT COUNT(*) FROM cntrldb.ErrorLog "
+				+ "WHERE Dpid = '%s' AND Resolved = false;",
+				dpid);
+		// Connects to the database and executes the SQL statement.
+		try(Connection connect = ConnectionProvider.getConn();
+				PreparedStatement checkConn = connect.prepareStatement(checkQ);) {
+			boolean isResult = checkConn.execute();
+	    	do {
+	    		try (ResultSet rs = checkConn.getResultSet()) {
+	    			while (rs.next()) {
+	    				return(Integer.parseInt(rs.getString(1)));
+	    			}
+	    			isResult = checkConn.getMoreResults();
+	    		}
+	    	} while (isResult);
+	    	connect.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
 		}
 		return -1;
 	}
@@ -483,13 +513,12 @@ public class Dpkm {
 	 * @param sw Instance of a switch connected to the controller. 
 	 */
 	protected void writeSwitchToDB(OFDpkmStatus msg, IOFSwitch sw) {
-		String sql = "INSERT INTO cntrldb.ConfiguredPeers VALUES (default, ?, ?, ?, ? , ?, ?, ?, ?, ?)";
+		String sql = "INSERT INTO cntrldb.ConfiguredPeers VALUES "
+				+ "(default, ?, ?, ?, ? , ?, ?, ?, ?, ?)";
 		Timestamp currentTime = new Timestamp(Calendar.getInstance().getTime().getTime());
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
 				PreparedStatement writeDB = connect.prepareStatement(sql);) {
-			// "Cryptoperiod, PubKey1, PubKey2, Status, Compromised, IPv4Addr, IPv4AddrWG, Dpid from cntrldb.ConfiguredPeers");
-	        // Parameters start with 1
 			writeDB.setInt(1, currentCryptoperiod);
 	        writeDB.setString(2, msg.getKey());
 	        writeDB.setString(3, " ");
@@ -502,14 +531,13 @@ public class Dpkm {
 	        writeDB.executeUpdate();
 	        connect.close();
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
 	
 	/** 
-	 * Updates the database by modifying an existing record with the information contained 
-	 * in DPKM_STATUS message msg sent by switch sw.</br>
+	 * Updates the database by modifying an existing record with the information 
+	 * contained in DPKM_STATUS message msg sent by switch sw.</br>
 	 * Used internally to update an existing record for a new WireGuard key.
 	 * @param msg OFDpkmStatus response message received from the switch.
 	 * @param sw Instance of a switch connected to the controller. 
@@ -533,7 +561,6 @@ public class Dpkm {
 			writeDB.executeUpdate();
 			connect.close();
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
@@ -545,31 +572,32 @@ public class Dpkm {
 	 * @param id Integer id of record in database table.
 	 */
 	protected void updateSwitchCompromised(int id) {
-		String updateSwitch = String.format("UPDATE cntrldb.ConfiguredPeers SET Status='COMPROMISED', Compromised=true "
-    			+ "WHERE id = '%s'", id);
+		String updateSwitch = String.format("UPDATE cntrldb.ConfiguredPeers SET "
+				+ "Status='COMPROMISED', Compromised=true WHERE id = '%s'", id);
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
 				PreparedStatement writeDB = connect.prepareStatement(updateSwitch);) {
 			writeDB.executeUpdate(updateSwitch);
 			connect.close();
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 			log.error("Failed to compromise the switch.");
 		}
 	}
 	
 	/** 
-	 * Updates the database by inserting a new record with the information contained 
-	 * in DPKM_STATUS message msg.</br>
+	 * Updates the database by inserting a new peer connection between ipv4Addr
+	 * and ipv4AddrPeer.</br>
 	 * Used internally to add a record for a new WireGuard peer connection.
 	 * @param ipv4Addr IPv4 Address of the source peer switch.
 	 * @param ipv4AddrPeer IPv4 Address of the target peer switch.
 	 */
 	protected void addPeerConnection(String ipv4Addr, String ipv4AddrPeer) {
-		String addPeerQuery = String.format("INSERT INTO cntrldb.CommunicatingPeers(Cid,PID1,PID2,Status,Communicating) "
-				+ "VALUES(default,(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'),"
-				+ "(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'),'PID1ONLY',default);", 
+		String addPeerQuery = String.format("INSERT INTO cntrldb.CommunicatingPeers"
+				+ "(Cid,PID1,PID2,Status,Communicating) VALUES(default,"
+				+ "(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'),"
+				+ "(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'),"
+				+ "'PID1ONLY',default);", 
 				ipv4Addr,ipv4AddrPeer);
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
@@ -577,15 +605,14 @@ public class Dpkm {
 			addPeer.executeUpdate(addPeerQuery);
 			connect.close();
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
 	
 	/** 
-	 * Updates the database by modifying an existing record with the information contained 
-	 * in DPKM_STATUS message msg.</br>
-	 * Chooses an SQL Query based on statusChange.</br>
+	 * Updates the database by modifying an existing connection with matching IP 
+	 * addresses ipv4Addr and ipv4AddrPeer.</br>
+	 * Chooses an SQL Query based on integer statusChange.</br>
 	 * Default: set connection status as 'CONNECTED'.</br>
 	 * statusChange(1): set connection status as 'KEY CHANGED'.</br>
 	 * statusChange(2): set connection status as 'REMOVED'.</br>
@@ -594,7 +621,8 @@ public class Dpkm {
 	 * statusChange(5): set connection status as 'BOTH'.</br>
 	 * statusChange(6): set connection status as 'BOTH CHANGED'.</br>
 	 * statusChange(7): set connection status as 'BOTH REMOVED'.</br>
-	 * Used internally to update an existing peer connection to reflect state of switch. 
+	 * Used internally to update an existing peer connection to reflect state 
+	 * of switch. 
 	 * @param ipv4Addr IPv4 Address of the source peer switch.
 	 * @param ipv4AddrPeer IPv4 Address of the target peer switch.
 	 * @param statusChange Integer used as a flag. 
@@ -676,31 +704,30 @@ public class Dpkm {
 			updateCon.executeUpdate(updateQuery);
 			connect.close();
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
 	
 	/** 
-	 * Updates the database by removing the record matching the IP addresses contained 
-	 * in DPKM_STATUS message msg. </br>
+	 * Updates the database by removing the record matching the IP addresses  
+	 * ipv4Addr and ipv4Peer. </br>
 	 * Used internally to remove an existing peer connection.
-	 * @param msg OFDpkmStatus response message received from the switch.
+	 * @param ipv4Addr IPv4 address of the current switch.
+	 * @param ipv4Peer IPv4 address of the peer linked to the current switch.
 	 */
-	protected void removePeerConnection(OFDpkmStatus msg) {
+	protected void removePeerConnection(String ipv4Addr, String ipv4Peer) {
 		String removeQuery = String.format("DELETE FROM cntrldb.CommunicatingPeers WHERE "
 				+ "PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
 				+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') OR "
 				+ "(PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
 				+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'));", 
-				msg.getIpv4Addr(), msg.getIpv4Peer(), msg.getIpv4Peer(), msg.getIpv4Addr());
+				ipv4Addr, ipv4Peer, ipv4Peer, ipv4Addr);
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
 				PreparedStatement removeCon = connect.prepareStatement(removeQuery);) {
 			removeCon.executeUpdate(removeQuery);
 			connect.close();
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
@@ -719,7 +746,6 @@ public class Dpkm {
 			removeCon.executeUpdate(removeQuery);
 			connect.close();
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}

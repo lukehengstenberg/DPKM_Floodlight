@@ -83,7 +83,8 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
 	 * This triggers the switch to remove the peer info from its WireGuard interface, 
 	 * returning a DPKM_STATUS or error response message. 
 	 * @param sourceDpid DatapathId of the switch removing the peer. 
-	 * @param targetDpid DatapathId of the switch to be removed as a peer.  
+	 * @param targetDpid DatapathId of the switch to be removed as a peer.
+	 * @param keyChange Boolean specifying if the key has changed.  
 	 */
     public void sendDeletePeerMessage(String sourceDpid, String targetDpid, boolean keyChange);
     
@@ -138,4 +139,12 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
 	 * @param revType Revocation type either reconfigure or terminate switch.   
 	 */
     public void revoke(String dpid, String revType);
+    
+    /** 
+	 * Returns unresolved error count for switch with DatapathId dpid.</br>
+	 * Used internally for a number of conditional statements.  
+	 * @param dpid DatapathId of a switch in string format.
+	 * @return int Error count or -1.
+	 */
+    public int checkError(String dpid);
 }

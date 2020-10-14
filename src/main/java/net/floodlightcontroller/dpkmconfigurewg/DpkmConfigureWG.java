@@ -51,6 +51,7 @@ import org.projectfloodlight.openflow.protocol.action.OFActionDpkmSetKey;
 import org.projectfloodlight.openflow.protocol.action.OFActionOutput;
 import org.projectfloodlight.openflow.protocol.action.OFActionPopVlan;
 import org.projectfloodlight.openflow.protocol.action.OFActions;
+import org.projectfloodlight.openflow.protocol.errormsg.OFDpkmBaseError;
 import org.projectfloodlight.openflow.protocol.instruction.OFInstruction;
 import org.projectfloodlight.openflow.protocol.instruction.OFInstructionApplyActions;
 import org.projectfloodlight.openflow.protocol.match.Match;
@@ -119,21 +120,21 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 	public String getName() {
 		return "DpkmConfigureWG";
 	}
-
+	
 	@Override
 	public boolean isCallbackOrderingPrereq(OFType type, String name) {
-		// TODO Auto-generated method stub
-		return false;
+		// All DPKM messages should be run past the error handler first. 
+		return (type.equals(OFType.EXPERIMENTER) && 
+				(name.equalsIgnoreCase("DpkmErrorHandler")));
 	}
 
 	@Override
 	public boolean isCallbackOrderingPostreq(OFType type, String name) {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
 	/** 
-	 * Implements a message listener for messages of type experimenter. </br>
+	 * Implements a message listener for messages of type experimenter </br>
 	 * Executes appropriate functions based on received message subtype.
 	 * @param sw Instance of a switch connected to the controller.
 	 * @param msg The received OpenFlow message.
@@ -147,52 +148,54 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 		    	OFDpkmHeader inExperimenter = (OFDpkmHeader) msg;
 		    	// Subtype 0 means a set key message has been sent.
 		    	if(inExperimenter.getSubtype() == 0) {
-		    		log.info(String.format("DPKM_SET_KEY message sent to switch %s", sw.getId().toString()));
+		    		log.info(String.format("DPKM_SET_KEY message sent to switch %s", 
+		    				sw.getId().toString()));
 		    		break;
 		    	}
 		    	// Subtype 1 means a delete key message has been sent.
 		    	if(inExperimenter.getSubtype() == 1) {
-		    		log.info(String.format("DPKM_DELETE_KEY message sent to switch %s", sw.getId().toString()));
+		    		log.info(String.format("DPKM_DELETE_KEY message sent to switch %s", 
+		    				sw.getId().toString()));
 		    		break;
 		    	}
 		    	// Subtype 2 means an add peer message has been sent.
 		    	if(inExperimenter.getSubtype() == 2) {
-		    		log.info(String.format("DPKM_ADD_PEER message sent to switch %s", sw.getId().toString()));
+		    		log.info(String.format("DPKM_ADD_PEER message sent to switch %s", 
+		    				sw.getId().toString()));
 		    		break;
 		    	}
 		    	// Subtype 3 means a delete peer message has been sent. 
 		    	if(inExperimenter.getSubtype() == 3) {
-		    		log.info(String.format("DPKM_DELETE_PEER message sent to switch %s", sw.getId().toString()));
+		    		log.info(String.format("DPKM_DELETE_PEER message sent to switch %s", 
+		    				sw.getId().toString()));
 		    		break;
 		    	}
 		    	// Subtype 4 means a get status message has been sent. 
 		    	if(inExperimenter.getSubtype() == 4) {
-		    		log.info(String.format("DPKM_GET_STATUS message sent to switch %s", sw.getId().toString()));
+		    		log.info(String.format("DPKM_GET_STATUS message sent to switch %s", 
+		    				sw.getId().toString()));
 		    		break;
 		    	}
 		    	// Subtype 5 means a status message has been received and should be processed. 
 		    	if(inExperimenter.getSubtype() == 5) {
-		    		try {
-						processStatusMessage(sw, (OFDpkmStatus)msg);
-					} catch (IOException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					}
+		    		processStatusMessage(sw, (OFDpkmStatus)msg);
 		    		break;
 		    	}
-		    	// Subtype 6 means an error message has been received and should be processed. 
+		    	// Subtype 6 means an error message has been received and should be processed.
+		    	// DEPRECIATED: Error messages are type (1) not experimenter.  
 		    	if(inExperimenter.getSubtype() == 6) {
-		    		log.info(String.format("DPKM_ERROR message received from switch %s", sw.getId().toString()));
+		    		log.info(String.format("DPKM_ERROR message received from switch %s", 
+		    				sw.getId().toString()));
 		    		break;
 		    	}
 		    	// Subtypes 7 & 8 were used for test request/response messages. 
 		    	if(inExperimenter.getSubtype() == 7 || inExperimenter.getSubtype() == 8) {
-		    		log.info(String.format("DPKM_TEST message received from switch %s", sw.getId().toString()));
+		    		log.info(String.format("DPKM_TEST message received from switch %s", 
+		    				sw.getId().toString()));
 		    		break;
 		    	}
 		    	else {
-		    		System.out.println(inExperimenter.getSubtype());
-		    		System.out.println("Caught an experimenter message but did not recognise subtype.");
+		    		log.info("Caught an experimenter message but did not recognise subtype.");
 		    	}
 			default:
 				break;
@@ -205,10 +208,8 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 	 * Calls one of several functions to process based on type of status response.
 	 * @param sw Instance of a switch connected to the controller.
 	 * @param msg The received OpenFlow DPKM Status message.
-	 * @throws IOException.  
 	 */
-	private void processStatusMessage(IOFSwitch sw, OFDpkmStatus msg) throws IOException {
-		//log.info(String.format("A status response was received from switch %s.", sw.getId().toString()));
+	private void processStatusMessage(IOFSwitch sw, OFDpkmStatus msg) {
 		// Executed if the status response shows WG has been configured.
 		if(msg.getStatusFlag() == OFDpkmStatusFlag.DPKM_STATUS_FLAG_CONFIGURED) {
 			processConfigured(sw, msg);
@@ -234,7 +235,8 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 	 * @param msg The received OpenFlow DPKM Status message.
 	 */
 	private synchronized void processConfigured(IOFSwitch sw, OFDpkmStatus msg) {
-		log.info(String.format("Switch %s has been configured successfully.", sw.getId().toString()));
+		log.info(String.format("Switch %s has been configured successfully.", 
+				sw.getId().toString()));
 		// Adds the new WG switch to the database.
 		if(checkIPExists(msg.getIpv4Addr()).equals("0")) {
 			writeSwitchToDB(msg, sw);
@@ -285,7 +287,6 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 						sendDeletePeerMessage(p.dpidB, p.dpidA, true);
 					}
 				}
-				
 			}
 			else if(checkConfigured() == 1) {
 				log.info("No other WG configured switches in the DB. ");
@@ -317,7 +318,8 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 			if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 3) > 0) {
 				// 3 == COMMUNICATING. 
 				updatePeerInfo(msg.getIpv4Addr(), msg.getIpv4Peer(), 3);
-				IOFSwitch peer = switchService.getSwitch(DatapathId.of(getDpId(msg.getIpv4Peer(), 0, false)));
+				IOFSwitch peer = switchService.getSwitch(DatapathId.of(getDpId(
+						msg.getIpv4Peer(), 0, false)));
 				// Restore previous flow configuration to continue encryption.
 				handleFlowRekeying(sw, peer, false);
 			} 
@@ -342,7 +344,7 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 				sw.getId().toString(), getDpId(msg.getIpv4Peer(), 0, false)));
 		// Remove connection if exists and status 'REMOVED' (key removed).
 		if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 2) > 0) {
-			removePeerConnection(msg);
+			removePeerConnection(msg.getIpv4Addr(),msg.getIpv4Peer());
 			// Remove switch if no remaining peer connections.
 			if(checkConnectedAny(msg.getIpv4Peer()) == 0) {
 				removeSwitch(msg.getIpv4Peer());
@@ -363,7 +365,7 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 		// Removes connection from db. 
 		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 0) > 0) {
 			sendDeletePeerMessage(getDpId(msg.getIpv4Peer(), 0, false), sw.getId().toString(), false);
-			removePeerConnection(msg);
+			removePeerConnection(msg.getIpv4Addr(),msg.getIpv4Peer());
 		}
 		// Connection removed from both switches. 
 		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 0) == 0) {
@@ -474,7 +476,6 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 			} while (isResult);
 			connect.close();
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 			log.error("Failed to access the database when retrieving switches.");
 		}
@@ -488,12 +489,17 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 	 */
 	@Override
 	public List<DpkmPeers> getPeers() {
-		String getSQL = "SELECT CommunicatingPeers.Cid, ConfiguredPeer1.Dpid as 'Dpid1', ConfiguredPeer1.IPv4Addr as 'IPv4Addr1', "
-				+ "ConfiguredPeer1.IPv4AddrWG as 'IPv4AddrWG1', ConfiguredPeer2.Dpid as 'Dpid2', "
-				+ "ConfiguredPeer2.IPv4Addr as 'IPv4Addr2', ConfiguredPeer2.IPv4AddrWG as 'IPv4AddrWG2', "
+		String getSQL = "SELECT CommunicatingPeers.Cid, ConfiguredPeer1.Dpid as "
+				+ "'Dpid1', ConfiguredPeer1.IPv4Addr as 'IPv4Addr1', "
+				+ "ConfiguredPeer1.IPv4AddrWG as 'IPv4AddrWG1', "
+				+ "ConfiguredPeer2.Dpid as 'Dpid2', "
+				+ "ConfiguredPeer2.IPv4Addr as 'IPv4Addr2', "
+				+ "ConfiguredPeer2.IPv4AddrWG as 'IPv4AddrWG2', "
 				+ "CommunicatingPeers.Status FROM CommunicatingPeers  "
-				+ "LEFT JOIN (ConfiguredPeers as ConfiguredPeer1) ON (CommunicatingPeers.PID1 = ConfiguredPeer1.id) "
-				+ "LEFT JOIN (ConfiguredPeers as ConfiguredPeer2) ON (CommunicatingPeers.PID2 = ConfiguredPeer2.id) "
+				+ "LEFT JOIN (ConfiguredPeers as ConfiguredPeer1) ON "
+				+ "(CommunicatingPeers.PID1 = ConfiguredPeer1.id) "
+				+ "LEFT JOIN (ConfiguredPeers as ConfiguredPeer2) ON "
+				+ "(CommunicatingPeers.PID2 = ConfiguredPeer2.id) "
 				+ "ORDER BY CommunicatingPeers.Cid;";
 		ArrayList<DpkmPeers> confPeers = new ArrayList<DpkmPeers>();
 		// Connects to the database and executes the SQL statement. 
@@ -519,7 +525,6 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 			} while (isResult);
 			connect.close();
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 			log.error("Failed to access the database when retrieving peers.");
 		}
@@ -554,7 +559,6 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 	    	} while (isResult);
 	    	connect.close();
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 			log.error("Failed to access the database when sending DPKM_ADD_PEER message.");
 		} 
@@ -593,7 +597,6 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 	    	} while (isResult);
 	    	connect.close();
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 			log.error("Failed to access the database when sending DPKM_DELETE_PEER message.");
 		} 
@@ -611,8 +614,8 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
     		// Initialise the switches. 
     		IOFSwitch peerA = switchService.getSwitch(DatapathId.of(dpidA));
 			IOFSwitch peerB = switchService.getSwitch(DatapathId.of(dpidB));
-			String ipv4A = getIp(peerA, false);
-			String ipv4B = getIp(peerB, false);
+			String ipv4A = getIp(dpidA, false);
+			String ipv4B = getIp(dpidB, false);
 			OFFlowAdd flowA = constructFlowAdd(peerA, peerB);
 			OFFlowAdd flowB = constructFlowAdd(peerB, peerA);
 			// Write FLOW_MOD (ADD) messages to switches.
@@ -672,13 +675,14 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
     public synchronized void rekey(String dpid, int cryptoperiod) {
     	try {
     		IOFSwitch sw = switchService.getSwitch(DatapathId.of(dpid));
-    		if(!getIp(sw,false).equalsIgnoreCase("Error")) {
-    			String ipv4 = getIp(sw,false);
+    		if(!getIp(dpid,false).equalsIgnoreCase("Error")) {
+    			String ipv4 = getIp(dpid,false);
     			if(checkConnectedAny(ipv4) > 0) {
     				Iterator<DpkmPeers> iter = getPeers().iterator();
     				while (iter.hasNext()) {
     					DpkmPeers p = iter.next();
-    					if (p.ipv4AddrA.equalsIgnoreCase(ipv4) || p.ipv4AddrB.equalsIgnoreCase(ipv4)) {
+    					if (p.ipv4AddrA.equalsIgnoreCase(ipv4) || 
+    							p.ipv4AddrB.equalsIgnoreCase(ipv4)) {
     						if (checkConnected(p.ipv4AddrA, p.ipv4AddrB, 1) > 0) {
     							// 6 == both keys changed.
     							updatePeerInfo(p.ipv4AddrA, p.ipv4AddrB, 6);
@@ -687,8 +691,10 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
     							updatePeerInfo(p.ipv4AddrA, p.ipv4AddrB, 1);
     							// If communicating temporarily redirect flow to normal port.
     							if (checkConnected(p.ipv4AddrA, p.ipv4AddrB, 3) > 0) {
-    								IOFSwitch peerA = switchService.getSwitch(DatapathId.of(p.dpidA));
-    								IOFSwitch peerB = switchService.getSwitch(DatapathId.of(p.dpidB));
+    								IOFSwitch peerA = switchService
+    										.getSwitch(DatapathId.of(p.dpidA));
+    								IOFSwitch peerB = switchService
+    										.getSwitch(DatapathId.of(p.dpidB));
         							handleFlowRekeying(peerA, peerB, true);
         						}
     						}
@@ -714,7 +720,7 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
     public void compromiseNode(int id) {
     	updateSwitchCompromised(id);
     	IOFSwitch sw = switchService.getSwitch(DatapathId.of(getDpId(" ",id,true)));
-    	String ipv4 = getIp(sw,false);
+    	String ipv4 = getIp(sw.getId().toString(),false);
     	if(checkConnectedAny(ipv4) > 0) {
     		Iterator<DpkmPeers> iter = getPeers().iterator();
 			while (iter.hasNext()) {
@@ -777,7 +783,6 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 
 	@Override
 	public void startUp(FloodlightModuleContext context) throws FloodlightModuleException {
-		//floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
 		floodlightProvider.addOFMessageListener(OFType.EXPERIMENTER, this);
         restApiService.addRestletRoutable(new DpkmConfigureWGWebRoutable());
 	}

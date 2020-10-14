@@ -60,13 +60,20 @@ public class DpkmConfigureWGResource extends ServerResource {
 				(IDpkmConfigureWGService)getContext().getAttributes()
 				.get(IDpkmConfigureWGService.class.getCanonicalName());
 		DpkmSwitch node = jsonToDpkmSwitch(fmJson);
-		if (node == null) {
-			return "{\"status\" : \"Error! Could not parse switch info, see log for details.\"}";
-		}
 		String status = null;
+		if (node == null) {
+			status = "Error! Could not parse switch info, see log for details.";
+			log.error(status);
+			return ("{\"status\" : \"" + status + "\"}");
+		}
+		if(configureWG.checkError(node.dpid) > 0) {
+			status = "Switch has an unresolved error that requires administrator "
+					+ "attention. See log for details.";
+			log.error(status);
+			return ("{\"status\" : \"" + status + "\"}");
+		}
 		configureWG.sendSetKeyMessage(DatapathId.of(node.dpid), node.cryptoperiod);
 		status = "DPKM_SET_KEY message sent to switch.";
-		// Need to use cryptoperiod here to begin a timer. 
 		return ("{\"status\" : \"" + status + "\"}");
 	}
 	
@@ -82,10 +89,12 @@ public class DpkmConfigureWGResource extends ServerResource {
 				(IDpkmConfigureWGService)getContext().getAttributes()
 				.get(IDpkmConfigureWGService.class.getCanonicalName());
 		DpkmSwitch node = jsonToDpkmSwitch(fmJson);
-		if (node == null) {
-			return "{\"status\" : \"Error! Could not parse switch info, see log for details.\"}";
-		}
 		String status = null;
+		if (node == null) {
+			status = "Error! Could not parse switch info, see log for details.";
+			log.error(status);
+			return ("{\"status\" : \"" + status + "\"}");
+		}
 		boolean exists = false;
 		Iterator<DpkmSwitch> iter = configureWG.getSwitches().iterator();
 		// Loop through switch records to find switch information.

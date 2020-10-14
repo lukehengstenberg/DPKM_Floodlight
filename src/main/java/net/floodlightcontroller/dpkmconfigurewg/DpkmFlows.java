@@ -57,8 +57,8 @@ public class DpkmFlows extends Dpkm{
 	 * @return OFFlowAdd message with flow targeting peerA and peerB.
 	 */
 	public OFFlowAdd constructFlowAdd(IOFSwitch peerA, IOFSwitch peerB) {
-		String ipv4A = getIp(peerA,false);
-		String ipv4B = getIp(peerB,false);
+		String ipv4A = getIp(peerA.getId().toString(),false);
+		String ipv4B = getIp(peerB.getId().toString(),false);
 		// Create match conditions for switch.
 		Match dpkmMatch = peerA.getOFFactory().buildMatch()
 				//.setExact(MatchField.DPKM_METHOD, U8.of((short) 1))
@@ -80,14 +80,14 @@ public class DpkmFlows extends Dpkm{
 		OFActionSetField setIpSrc = actions.buildSetField()
 				.setField(
 						oxms.buildIpv4Src()
-						.setValue(IPv4Address.of(getIp(peerA,true)))
+						.setValue(IPv4Address.of(getIp(peerA.getId().toString(),true)))
 						.build()).build();
 		actionList.add(setIpSrc);
 		// Modify ipv4 destination field in packet to be WG destination address.
 		OFActionSetField setIpDst = actions.buildSetField()
 				.setField(
 						oxms.buildIpv4Dst()
-						.setValue(IPv4Address.of(getIp(peerB,true)))
+						.setValue(IPv4Address.of(getIp(peerB.getId().toString(),true)))
 						.build()).build();
 		actionList.add(setIpDst);
 		// Set action as output aka output on WireGuard port.

@@ -31,3 +31,4 @@ net.floodlightcontroller.routing.RoutingManager
 net.floodlightcontroller.cpanalyzer.CPAnalyzer
 net.floodlightcontroller.hasupport.HAController
 net.floodlightcontroller.dpkmconfigurewg.DpkmConfigureWG
+net.floodlightcontroller.dpkmconfigurewg.DpkmErrorHandler
