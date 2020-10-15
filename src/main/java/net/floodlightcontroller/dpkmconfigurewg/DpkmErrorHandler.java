@@ -238,9 +238,14 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 	}
 	
 	/** 
-	 * Handles 
+	 * Handles errors caused by a DPKM_SET_KEY message. </br>
+	 * Resends the message twice so the controller has three attempts in total. </br>
+	 * If all three attempts fail mark the error as ACTION_NEEDED which means the
+	 * switch is now blocked from performing DPKM related functions until the 
+	 * administrator marks it as resolved. 
 	 * @param sw Instance of a switch connected to the controller.
-	 * @param inError OFDpkmBaseError error message received from the switch.
+	 * @param errCode Error code identifying a specific error.
+	 * @param note Extra information about the error.
 	 */
 	private synchronized void handleErrorSetKey(IOFSwitch sw, String errCode, 
 			String note) {
@@ -266,6 +271,16 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 		}
 	}
 	
+	/** 
+	 * Handles errors caused by a DPKM_DELETE_KEY message. </br>
+	 * Resends the message twice so the controller has three attempts in total. </br>
+	 * If all three attempts fail mark the error as ACTION_NEEDED which means the
+	 * switch is now blocked from performing DPKM related functions until the 
+	 * administrator marks it as resolved. 
+	 * @param sw Instance of a switch connected to the controller.
+	 * @param errCode Error code identifying a specific error.
+	 * @param note Extra information about the error.
+	 */
 	private synchronized void handleErrorDeleteKey(IOFSwitch sw, String errCode, 
 			String note) {
 		String dpid = sw.getId().toString();
@@ -291,6 +306,17 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 		}
 	}
 	
+	/** 
+	 * Handles errors caused by a DPKM_ADD_PEER message. </br>
+	 * Resends the message twice so the controller has three attempts in total. </br>
+	 * If all three attempts fail mark the error as ACTION_NEEDED which means the
+	 * switch is now blocked from performing DPKM related functions until the 
+	 * administrator marks it as resolved. 
+	 * @param sw Instance of a switch connected to the controller.
+	 * @param errCode Error code identifying a specific error.
+	 * @param note Extra information about the error.
+	 * @param ipv4Peer IPv4 address of the peer switch.
+	 */
 	private synchronized void handleErrorAddPeer(IOFSwitch sw,  String errCode, 
 			String note, String ipv4Peer) {
 		String dpid = sw.getId().toString();
@@ -307,9 +333,11 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 					+ "will be disconnected and must be repaired.", dpid,note);
 			log.error(note);
 			updateMaxAttempt(dpid, errCode, "ACTION NEEDED");	
+			// Remove the intermediate peer connection record.
 			if(checkConnected(ipv4A,ipv4Peer,4) > 0) {
 				removePeerConnection(ipv4A,ipv4Peer);
 			}
+			// Remove the faulty switch as a peer on the working switch.
 			else if(checkConnected(ipv4A,ipv4Peer,5) > 0) {
 				removePeerConnection(ipv4A,ipv4Peer);
 				confWGService.sendDeletePeerMessage(peerDpid, dpid, false);
@@ -321,10 +349,12 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 			log.error(String.format("Attempt %s: Switch '%s' %s", 
 					attempt, dpid, note));
 			updateAttempt(dpid,errCode);
+			// Remove the intermediate peer connection record and try again.
 			if(checkConnected(ipv4A,ipv4Peer,4) > 0) {
 				removePeerConnection(ipv4A,ipv4Peer);
 				confWGService.sendAddPeerMessage(dpid, peerDpid);
 			}
+			// Update to show only half the connection is made and try again.
 			else if(checkConnected(ipv4A,ipv4Peer,5) > 0) {
 				updatePeerInfo(ipv4A,ipv4Peer,4);
 				confWGService.sendAddPeerMessage(dpid, peerDpid);
@@ -336,6 +366,17 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 		}
 	}
 	
+	/** 
+	 * Handles errors caused by a DPKM_DELETE_PEER message. </br>
+	 * Resends the message twice so the controller has three attempts in total. </br>
+	 * If all three attempts fail mark the error as ACTION_NEEDED which means the
+	 * switch is now blocked from performing DPKM related functions until the 
+	 * administrator marks it as resolved. 
+	 * @param sw Instance of a switch connected to the controller.
+	 * @param errCode Error code identifying a specific error.
+	 * @param note Extra information about the error.
+	 * @param ipv4Peer IPv4 address of the peer switch.
+	 */
 	private synchronized void handleErrorDeletePeer(IOFSwitch sw, String errCode, 
 			String note, String ipv4Peer) {
 		String dpid = sw.getId().toString();
@@ -353,6 +394,7 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 			log.error(note);
 			updateMaxAttempt(dpid, errCode, "ACTION NEEDED");
 			//sw.disconnect();
+			// Remove the faulty switch as a peer on the working switch.
 			confWGService.sendDeletePeerMessage(peerDpid, dpid, false);
 			removePeerConnection(ipv4,ipv4Peer);
 			removeSwitch(ipv4);
@@ -369,32 +411,61 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 		}
 	}
 	
+	/** 
+	 * Handles get and missing errors caused by SET_KEY, ADD_PEER, or DELETE_PEER
+	 * messages. </br>
+	 * Identifies the message that caused the error by extracting the msgType 
+	 * from the returned error message string. </br>
+	 * Resends the message twice so the controller has three attempts in total. </br>
+	 * If all three attempts fail mark the error as ACTION_NEEDED which means the
+	 * switch is now blocked from performing DPKM related functions until the 
+	 * administrator marks it as resolved. 
+	 * @param sw Instance of a switch connected to the controller.
+	 * @param inError OFDpkmBaseError error message received from the switch.
+	 * @param errCode Error code identifying a specific error.
+	 * @param note Extra information about the error.
+	 */
 	private synchronized void handleErrorOther(IOFSwitch sw, OFDpkmBaseError inError, 
 			String errCode, String note) {
 		String ipv4Peer;
 		String msg = inError.getData().toString();
 		String msgType = msg.substring(msg.indexOf("data=") + 7,
 				msg.indexOf("Ver14"));
+		// Message was DPKM_SET_KEY so call the handler. 
 		if(msgType.equalsIgnoreCase("SetKey")) {
 			handleErrorSetKey(sw, errCode, note);
 		}
+		// If ipv4 field in message is missing retrieve it using the key.
+		else if(errCode.equalsIgnoreCase("MISSING_IP_S")) {
+			String key = msg.substring(msg.indexOf("key=") + 4,
+					msg.indexOf(", ipv4Addr"));
+			ipv4Peer = getIpFromKey(key);
+			if(!ipv4Peer.equalsIgnoreCase("Error") && 
+					msgType.equalsIgnoreCase("AddPeer")) {
+				handleErrorAddPeer(sw, errCode, note, ipv4Peer);
+			}
+			else if(!ipv4Peer.equalsIgnoreCase("Error") && 
+					msgType.equalsIgnoreCase("DeletePeer")) {
+				handleErrorDeletePeer(sw, errCode, note, ipv4Peer);
+			} else {
+				log.error(String.format("Failed to correctly handle %s error. "
+						+ "See log for details.", errCode));
+			}
+		}
+		// Message was DPKM_ADD_PEER so call the handler. 
 		else if(msgType.equalsIgnoreCase("AddPeer")) {
 			ipv4Peer = extractIp(inError);
 			handleErrorAddPeer(sw, errCode, note, ipv4Peer);
+			
 		}
+		// Message was DPKM_DELETE_PEER so call the handler. 
 		else if(msgType.equalsIgnoreCase("DeletePeer")) {
-			if(errCode.equalsIgnoreCase("MISSING_IP_S")) {
-				String key = msg.substring(msg.indexOf("key=") + 4,
-						msg.indexOf(", ipv4Addr"));
-				ipv4Peer = getIpFromKey(key);
-				if(!ipv4Peer.equalsIgnoreCase("Error")) {
-					handleErrorDeletePeer(sw, errCode, note, ipv4Peer);
-				}
-			} else {
-				ipv4Peer = extractIp(inError);
-				handleErrorDeletePeer(sw, errCode, note, ipv4Peer);
-			}
-		} 
+			ipv4Peer = extractIp(inError);
+			handleErrorDeletePeer(sw, errCode, note, ipv4Peer);
+		} else {
+			log.error(String.format("Failed to correctly handle %s error. "
+					+ "See log for details.", errCode));
+		}
 	}
 	
 	private synchronized void handleErrorDecodeGetStatus(IOFSwitch sw) {

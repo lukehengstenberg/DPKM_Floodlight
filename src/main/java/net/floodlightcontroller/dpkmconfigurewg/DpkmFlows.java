@@ -80,14 +80,16 @@ public class DpkmFlows extends Dpkm{
 		OFActionSetField setIpSrc = actions.buildSetField()
 				.setField(
 						oxms.buildIpv4Src()
-						.setValue(IPv4Address.of(getIp(peerA.getId().toString(),true)))
+						.setValue(IPv4Address
+								.of(getIp(peerA.getId().toString(),true)))
 						.build()).build();
 		actionList.add(setIpSrc);
 		// Modify ipv4 destination field in packet to be WG destination address.
 		OFActionSetField setIpDst = actions.buildSetField()
 				.setField(
 						oxms.buildIpv4Dst()
-						.setValue(IPv4Address.of(getIp(peerB.getId().toString(),true)))
+						.setValue(IPv4Address
+								.of(getIp(peerB.getId().toString(),true)))
 						.build()).build();
 		actionList.add(setIpDst);
 		// Set action as output aka output on WireGuard port.
@@ -98,7 +100,8 @@ public class DpkmFlows extends Dpkm{
 		actionList.add(output);
 		
 		// Write instruction to apply action list to packet on switch end.
-		OFInstructionApplyActions applyActions = peerA.getOFFactory().instructions().buildApplyActions()
+		OFInstructionApplyActions applyActions = peerA.getOFFactory()
+				.instructions().buildApplyActions()
 				.setActions(actionList)
 				.build();
 		ArrayList<OFInstruction> instructionList = new ArrayList<OFInstruction>();
@@ -150,7 +153,8 @@ public class DpkmFlows extends Dpkm{
 				.build();
 		actionList.add(output);
 		// Write instruction to apply action list to packet on switch end.
-		OFInstructionApplyActions applyActions = peerA.getOFFactory().instructions().buildApplyActions()
+		OFInstructionApplyActions applyActions = peerA.getOFFactory()
+				.instructions().buildApplyActions()
 				.setActions(actionList)
 				.build();
 		ArrayList<OFInstruction> instructionList = new ArrayList<OFInstruction>();

@@ -33,12 +33,14 @@ public class DpkmRekeyResource extends ServerResource {
 				(IDpkmConfigureWGService)getContext().getAttributes()
 				.get(IDpkmConfigureWGService.class.getCanonicalName());
 		DpkmSwitch node = DpkmConfigureWGResource.jsonToDpkmSwitch(fmJson);
-		if (node == null) {
-			return "{\"status\" : \"Error! Could not parse switch info, see log for details.\"}";
-		}
 		String status = null;
+		if (node == null) {
+			status = "Error! Could not parse switch info, see log for details.";
+			return ("{\"status\" : \"" + status + "\"}");
+		}
 		if(configureWG.checkCompromised(node.dpid)) {
-			return "{\"status\" : \"Error! Cannot rekey a compromised switch.\"}";
+			status = "Error! Cannot rekey a compromised switch.";
+			return ("{\"status\" : \"" + status + "\"}");
 		}
 		configureWG.rekey(node.dpid, node.cryptoperiod);
 		status = "DPKM_SET_KEY message sent to switch.";

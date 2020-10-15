@@ -51,10 +51,11 @@ public class DpkmManagePeerResource extends ServerResource {
 				(IDpkmConfigureWGService)getContext().getAttributes()
 				.get(IDpkmConfigureWGService.class.getCanonicalName());
 		DpkmPeers peers = jsonToDpkmPeer(fmJson);
-		if (peers == null) {
-			return "{\"status\" : \"Error! Could not parse switch info, see log for details.\"}";
-		}
 		String status = null;
+		if (peers == null) {
+			status = "Error! Could not parse switch info, see log for details.";
+			return ("{\"status\" : \"" + status + "\"}");
+		}
 		if (configureWG.checkConnected(peers.ipv4AddrA, peers.ipv4AddrB, 0) > 0) {
 			status = "Error! A peer connection with this switch already exists.";
 			log.error(status);

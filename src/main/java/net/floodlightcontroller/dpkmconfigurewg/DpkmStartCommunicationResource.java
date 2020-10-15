@@ -19,7 +19,8 @@ public class DpkmStartCommunicationResource extends ServerResource {
 	
 	/** 
 	 * Starts communication for connection with matching peer information in json.</br>
-	 * Deserializes to get both peer switch information, sending FLOW_ADD messages on success.
+	 * Deserializes to get both peer switch information, sending FLOW_ADD messages 
+	 * on success.
 	 * @param fmJson Json structure containing peer information.  
 	 * @return String status either success or error. 
 	 */
@@ -29,10 +30,11 @@ public class DpkmStartCommunicationResource extends ServerResource {
 				(IDpkmConfigureWGService)getContext().getAttributes()
 				.get(IDpkmConfigureWGService.class.getCanonicalName());
 		DpkmPeers peers = DpkmManagePeerResource.jsonToDpkmPeer(fmJson);
-		if (peers == null) {
-			return "{\"status\" : \"Error! Could not parse switch info, see log for details.\"}";
-		}
 		String status = null;
+		if (peers == null) {
+			status = "Error! Could not parse switch info, see log for details.";
+			return ("{\"status\" : \"" + status + "\"}");
+		}
 		boolean exists = false;
 		Iterator<DpkmPeers> iter = configureWG.getPeers().iterator();
 		while (iter.hasNext()) {
