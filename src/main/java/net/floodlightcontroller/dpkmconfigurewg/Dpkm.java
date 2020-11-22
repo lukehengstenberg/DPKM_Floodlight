@@ -43,7 +43,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.util.concurrent.ListenableFuture;
+import com.mysql.cj.exceptions.DataReadException;
 
+import junit.framework.Assert;
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.core.internal.IOFSwitchService;
 
@@ -76,16 +78,16 @@ public class Dpkm {
 				+ "IPv4Addr != '%s';", ipv4Addr);
 		// Connects to the database and executes the SQL statement. 
 		try(Connection connect = ConnectionProvider.getConn();
-				PreparedStatement peerInfo = connect.prepareStatement(getCred);) {
-			boolean isResult = peerInfo.execute();
+				PreparedStatement prep = connect.prepareStatement(getCred);) {
+			boolean isResult = prep.execute();
 	    	do {
-	    		try (ResultSet rs = peerInfo.getResultSet()) {
+	    		try (ResultSet rs = prep.getResultSet()) {
 	    			while (rs.next()) {
 	    				// Calls internal function to build and write message.
 	    				sendAddPeerMessageInternal(sw, rs.getString("PubKey1"),
 	    						rs.getString("IPv4Addr"),rs.getString("IPv4AddrWG"));
 	    			}
-	    			isResult = peerInfo.getMoreResults();
+	    			isResult = prep.getMoreResults();
 	    		}
 	    	} while (isResult);
 	    	connect.close();
@@ -110,14 +112,14 @@ public class Dpkm {
 			String sourceIPv4 = getIp(sw.getId().toString(), false);
 		    // If no connection exists add new record with status 'PID1ONLY'.
 		    // Otherwise, update connection to status 'BOTH'. 
-		    if(checkConnected(sourceIPv4, peerIPv4, 0) == 0) {
+		    if(checkConnected(sourceIPv4, peerIPv4, "CONNECTED") == 0) {
 		    	addPeerConnection(sourceIPv4, peerIPv4);
 		    } 
-		    else if(checkConnected(sourceIPv4, peerIPv4, 7) > 0) {
-		    	updatePeerInfo(sourceIPv4, peerIPv4, 4);
+		    else if(checkConnected(sourceIPv4, peerIPv4, "BOTH REMOVED") > 0) {
+		    	updatePeerInfo(sourceIPv4, peerIPv4, "PID1ONLY");
 		    }
 		    else {
-		    	updatePeerInfo(sourceIPv4, peerIPv4, 5);
+		    	updatePeerInfo(sourceIPv4, peerIPv4, "BOTH");
 		    }
 		    OFDpkmAddPeer addPeerMsg = sw.getOFFactory().buildDpkmAddPeer()
 				    .setKey(peerPubKey)
@@ -173,19 +175,20 @@ public class Dpkm {
 		}
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
-				PreparedStatement getDpid = connect.prepareStatement(getDpidSQL);) {
-			boolean isResult = getDpid.execute();
+				PreparedStatement prep = connect.prepareStatement(getDpidSQL);) {
+			boolean isResult = prep.execute();
 	    	do {
-	    		try (ResultSet rs = getDpid.getResultSet()) {
+	    		try (ResultSet rs = prep.getResultSet()) {
 	    			while (rs.next()) {
 	    				return(rs.getString(1));
 	    			}
-	    			isResult = getDpid.getMoreResults();
+	    			isResult = prep.getMoreResults();
 	    		}
 	    	} while (isResult);
 	    	connect.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
+			//e.printStackTrace();
+			throw new IllegalArgumentException(e);
 		}
     	return("Error");
 	}
@@ -205,19 +208,20 @@ public class Dpkm {
 		}
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
-				PreparedStatement getIp = connect.prepareStatement(getSQL);) {
-			boolean isResult = getIp.execute();
+				PreparedStatement prep = connect.prepareStatement(getSQL);) {
+			boolean isResult = prep.execute();
 	    	do {
-	    		try (ResultSet rs = getIp.getResultSet()) {
+	    		try (ResultSet rs = prep.getResultSet()) {
 	    			while (rs.next()) {
 	    				return(rs.getString(1));
 	    			}
-	    			isResult = getIp.getMoreResults();
+	    			isResult = prep.getMoreResults();
 	    		}
 	    	} while (isResult);
 	    	connect.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
+			//e.printStackTrace();
+			throw new IllegalArgumentException(e);
 		}
     	return("Error");
 	}
@@ -232,19 +236,20 @@ public class Dpkm {
 				+ "WHERE Dpid = '%s';",dpid);
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
-				PreparedStatement get = connect.prepareStatement(getSQL);) {
-			boolean isResult = get.execute();
+				PreparedStatement prep = connect.prepareStatement(getSQL);) {
+			boolean isResult = prep.execute();
 	    	do {
-	    		try (ResultSet rs = get.getResultSet()) {
+	    		try (ResultSet rs = prep.getResultSet()) {
 	    			while (rs.next()) {
 	    				return(rs.getInt(1));
 	    			}
-	    			isResult = get.getMoreResults();
+	    			isResult = prep.getMoreResults();
 	    		}
 	    	} while (isResult);
 	    	connect.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
+			//e.printStackTrace();
+			throw new IllegalArgumentException(e);
 		}
     	return -1;
 	}
@@ -259,19 +264,20 @@ public class Dpkm {
 				+ "WHERE IPv4Addr = '%s';",ipv4Addr);
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
-				PreparedStatement check = connect.prepareStatement(checkIP);) {
-			boolean isResult = check.execute();
+				PreparedStatement prep = connect.prepareStatement(checkIP);) {
+			boolean isResult = prep.execute();
 	    	do {
-	    		try (ResultSet rs = check.getResultSet()) {
+	    		try (ResultSet rs = prep.getResultSet()) {
 	    			while (rs.next()) {
 	    				return(rs.getString(1));
 	    			}
-	    			isResult = check.getMoreResults();
+	    			isResult = prep.getMoreResults();
 	    		}
 	    	} while (isResult);
 	    	connect.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
+			//e.printStackTrace();
+			throw new IllegalArgumentException(e);
 		}
     	return("Error");
 	}
@@ -284,19 +290,20 @@ public class Dpkm {
 				+ "STATUS = 'CONFIGURED';");
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
-				PreparedStatement checkStatus = connect.prepareStatement(checkConf);) {
-			boolean isResult = checkStatus.execute();
+				PreparedStatement prep = connect.prepareStatement(checkConf);) {
+			boolean isResult = prep.execute();
 	    	do {
-	    		try (ResultSet rs = checkStatus.getResultSet()) {
+	    		try (ResultSet rs = prep.getResultSet()) {
 	    			while (rs.next()) {
 	    				return(Integer.parseInt(rs.getString(1)));
 	    			}
-	    			isResult = checkStatus.getMoreResults();
+	    			isResult = prep.getMoreResults();
 	    		}
 	    	} while (isResult);
 	    	connect.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
+			//e.printStackTrace();
+			throw new IllegalArgumentException(e);
 		}
 		return -1;
 	}
@@ -312,19 +319,20 @@ public class Dpkm {
 				+ "WHERE Dpid = '%s';", dpid);
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
-				PreparedStatement check = connect.prepareStatement(checkComp);) {
-			boolean isResult = check.execute();
+				PreparedStatement prep = connect.prepareStatement(checkComp);) {
+			boolean isResult = prep.execute();
 	    	do {
-	    		try (ResultSet rs = check.getResultSet()) {
+	    		try (ResultSet rs = prep.getResultSet()) {
 	    			while (rs.next()) {
 	    				return(rs.getBoolean(1));
 	    			}
-	    			isResult = check.getMoreResults();
+	    			isResult = prep.getMoreResults();
 	    		}
 	    	} while (isResult);
 	    	connect.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
+			//e.printStackTrace();
+			throw new IllegalArgumentException(e);
 		}
 		return true;
 	}
@@ -343,10 +351,10 @@ public class Dpkm {
 	 * Used internally for a number of conditional statements.  
 	 * @param ipv4AddrA IPv4 Address of a switch 'A'.
 	 * @param ipv4AddrB IPv4 Address of a switch 'B'.
-	 * @param statusType Integer used as a flag. 
+	 * @param statusType String used as a flag. 
 	 * @return int Connection count or error (-1).
 	 */
-	public int checkConnected(String ipv4AddrA, String ipv4AddrB, int statusType) {
+	public int checkConnected(String ipv4AddrA, String ipv4AddrB, String statusType) {
 		// Check for connections between given addresses.
 		String checkQ = String.format("SELECT COUNT(*) FROM CommunicatingPeers "
 				+ "WHERE ((PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
@@ -355,28 +363,7 @@ public class Dpkm {
 				+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'))) AND "
 				+ "Status != 'KEY CHANGED' AND Status != 'BOTH CHANGED';",
 				ipv4AddrA,ipv4AddrB,ipv4AddrB,ipv4AddrA);
-		// Check connections where status is KEY CHANGED. 
-		if(statusType == 1) {
-			checkQ = String.format("SELECT COUNT(*) FROM CommunicatingPeers "
-					+ "WHERE ((PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
-					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s')) OR "
-					+ "(PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
-					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'))) AND "
-					+ "Status = 'KEY CHANGED';",
-					ipv4AddrA,ipv4AddrB,ipv4AddrB,ipv4AddrA);
-		}
-		// Check connections where status is REMOVED. 
-		else if(statusType == 2) {
-			checkQ = String.format("SELECT COUNT(*) FROM CommunicatingPeers "
-					+ "WHERE ((PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
-					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s')) OR "
-					+ "(PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
-					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'))) AND "
-					+ "Status = 'REMOVED';",
-					ipv4AddrA,ipv4AddrB,ipv4AddrB,ipv4AddrA);
-		}
-		// Check connections where status is COMMUNICATING.
-		else if(statusType == 3) {
+		if(statusType.equalsIgnoreCase("COMMUNICATING")) {
 			checkQ = String.format("SELECT COUNT(*) FROM CommunicatingPeers "
 					+ "WHERE ((PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
 					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s')) OR "
@@ -385,63 +372,33 @@ public class Dpkm {
 					+ "Communicating = true;",
 					ipv4AddrA,ipv4AddrB,ipv4AddrB,ipv4AddrA);
 		}
-		// Checks connections where status is PID1ONLY.
-		else if(statusType == 4) {
+		else if(!statusType.equalsIgnoreCase("CONNECTED")) {
 			checkQ = String.format("SELECT COUNT(*) FROM CommunicatingPeers "
 					+ "WHERE ((PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
 					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s')) OR "
 					+ "(PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
 					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'))) AND "
-					+ "Status = 'PID1ONLY';",
-					ipv4AddrA,ipv4AddrB,ipv4AddrB,ipv4AddrA);
-		}
-		// Checks connections where status is BOTH.
-		else if(statusType == 5) {
-			checkQ = String.format("SELECT COUNT(*) FROM CommunicatingPeers "
-					+ "WHERE ((PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
-					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s')) OR "
-					+ "(PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
-					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'))) AND "
-					+ "Status = 'BOTH';",
-					ipv4AddrA,ipv4AddrB,ipv4AddrB,ipv4AddrA);
-		}
-		// Checks connections where status is BOTH CHANGED.
-		else if(statusType == 6) {
-			checkQ = String.format("SELECT COUNT(*) FROM CommunicatingPeers "
-					+ "WHERE ((PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
-					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s')) OR "
-					+ "(PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
-					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'))) AND "
-					+ "Status = 'BOTH CHANGED';",
-					ipv4AddrA,ipv4AddrB,ipv4AddrB,ipv4AddrA);
-		}
-		// Checks connections where status is BOTH REMOVED.
-		else if(statusType == 7) {
-			checkQ = String.format("SELECT COUNT(*) FROM CommunicatingPeers "
-					+ "WHERE ((PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
-					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s')) OR "
-					+ "(PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
-					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'))) AND "
-					+ "Status = 'BOTH REMOVED';",
-					ipv4AddrA,ipv4AddrB,ipv4AddrB,ipv4AddrA);
+					+ "Status = '%s';",
+					ipv4AddrA,ipv4AddrB,ipv4AddrB,ipv4AddrA,statusType);
 		}
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
-				PreparedStatement checkConn = connect.prepareStatement(checkQ);) {
-			boolean isResult = checkConn.execute();
+				PreparedStatement prep = connect.prepareStatement(checkQ);) {
+			boolean isResult = prep.execute();
 			do {
-	    		try (ResultSet rs = checkConn.getResultSet()) {
+	    		try (ResultSet rs = prep.getResultSet()) {
 	    			while (rs.next()) {
 	    				return(Integer.parseInt(rs.getString(1)));
 	    			}
-	    			isResult = checkConn.getMoreResults();
+	    			isResult = prep.getMoreResults();
 	    		}
 	    	} while (isResult);
 			connect.close();
-		} catch (Exception e) {
-			e.printStackTrace();
+		} catch (SQLException e) {
+			//e.printStackTrace();
 			DpkmConfigureWG.log.error("Failed to access the database when "
 					+ "checking peer connections.");
+			throw new IllegalArgumentException(e);
 		}
 		return -1;
 	}
@@ -459,20 +416,21 @@ public class Dpkm {
 				ipv4Addr,ipv4Addr);
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
-				PreparedStatement checkConn = connect.prepareStatement(checkQ);) {
-			boolean isResult = checkConn.execute();
+				PreparedStatement prep = connect.prepareStatement(checkQ);) {
+			boolean isResult = prep.execute();
 	    	do {
-	    		try (ResultSet rs = checkConn.getResultSet()) {
+	    		try (ResultSet rs = prep.getResultSet()) {
 	    			while (rs.next()) {
 	    				return(Integer.parseInt(rs.getString(1)));
 	    			}
-	    			isResult = checkConn.getMoreResults();
+	    			isResult = prep.getMoreResults();
 	    		}
 	    	} while (isResult);
 	    	connect.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
-		}
+			//e.printStackTrace();
+			throw new IllegalArgumentException(e);
+		} 
 		return -1;
 	}
 	
@@ -488,19 +446,20 @@ public class Dpkm {
 				dpid);
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
-				PreparedStatement checkConn = connect.prepareStatement(checkQ);) {
-			boolean isResult = checkConn.execute();
+				PreparedStatement prep = connect.prepareStatement(checkQ);) {
+			boolean isResult = prep.execute();
 	    	do {
-	    		try (ResultSet rs = checkConn.getResultSet()) {
+	    		try (ResultSet rs = prep.getResultSet()) {
 	    			while (rs.next()) {
 	    				return(Integer.parseInt(rs.getString(1)));
 	    			}
-	    			isResult = checkConn.getMoreResults();
+	    			isResult = prep.getMoreResults();
 	    		}
 	    	} while (isResult);
 	    	connect.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
+			//e.printStackTrace();
+			throw new IllegalArgumentException(e);
 		}
 		return -1;
 	}
@@ -512,26 +471,27 @@ public class Dpkm {
 	 * @param msg OFDpkmStatus response message received from the switch.
 	 * @param sw Instance of a switch connected to the controller. 
 	 */
-	protected void writeSwitchToDB(OFDpkmStatus msg, IOFSwitch sw) {
+	protected void writeSwitchToDB(DpkmSwitch node) {
 		String sql = "INSERT INTO cntrldb.ConfiguredPeers VALUES "
 				+ "(default, ?, ?, ?, ? , ?, ?, ?, ?, ?)";
 		Timestamp currentTime = new Timestamp(Calendar.getInstance().getTime().getTime());
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
-				PreparedStatement writeDB = connect.prepareStatement(sql);) {
-			writeDB.setInt(1, currentCryptoperiod);
-	        writeDB.setString(2, msg.getKey());
-	        writeDB.setString(3, " ");
-	        writeDB.setString(4, "CONFIGURED");
-	        writeDB.setInt(5, 0);
-	        writeDB.setString(6, msg.getIpv4Addr());
-	        writeDB.setString(7, msg.getIpv4Wg());
-	        writeDB.setString(8, sw.getId().toString());
-	        writeDB.setTimestamp(9, currentTime);
-	        writeDB.executeUpdate();
+				PreparedStatement prep = connect.prepareStatement(sql);) {
+			prep.setInt(1, node.getCryptoperiod());
+			prep.setString(2, node.getPubKey1());
+			prep.setString(3, node.getPubKey2());
+			prep.setString(4, node.getStatus());
+			prep.setBoolean(5, node.getCompromised());
+			prep.setString(6, node.getIpv4Addr());
+			prep.setString(7, node.getIpv4AddrWG());
+			prep.setString(8, node.getDpId());
+			prep.setTimestamp(9, currentTime);
+			prep.executeUpdate();
 	        connect.close();
-		} catch (SQLException e) {
-			e.printStackTrace();
+		} catch (NullPointerException | SQLException e) {
+			//e.printStackTrace();
+			throw new IllegalArgumentException(e);
 		}
 	}
 	
@@ -542,26 +502,27 @@ public class Dpkm {
 	 * @param msg OFDpkmStatus response message received from the switch.
 	 * @param sw Instance of a switch connected to the controller. 
 	 */
-	protected void updateSwitchInDB(OFDpkmStatus msg, IOFSwitch sw) {
+	protected void updateSwitchInDB(DpkmSwitch node) {
 		String updateSwitch = ("UPDATE cntrldb.ConfiguredPeers SET Cryptoperiod=?, "
 				+ "PubKey2=PubKey1, PubKey1=?,Status=?,Compromised=?, IPv4AddrWG=?, "
 				+ "Dpid=?, Since=? WHERE IPv4Addr=?");
 		Timestamp currentTime = new Timestamp(Calendar.getInstance().getTime().getTime());
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
-				PreparedStatement writeDB = connect.prepareStatement(updateSwitch);) {
-			writeDB.setString(8, msg.getIpv4Addr());
-			writeDB.setInt(1, currentCryptoperiod);
-			writeDB.setString(2, msg.getKey());
-			writeDB.setString(3, "CONFIGURED");
-			writeDB.setInt(4, 0);
-			writeDB.setString(5, msg.getIpv4Wg());
-			writeDB.setString(6, sw.getId().toString());
-			writeDB.setTimestamp(7, currentTime);
-			writeDB.executeUpdate();
+				PreparedStatement prep = connect.prepareStatement(updateSwitch);) {
+			prep.setString(8, node.getIpv4Addr());
+			prep.setInt(1, node.getCryptoperiod());
+			prep.setString(2, node.getPubKey1());
+			prep.setString(3, node.getStatus());
+			prep.setBoolean(4, node.getCompromised());
+			prep.setString(5, node.getIpv4AddrWG());
+			prep.setString(6, node.getDpId());
+			prep.setTimestamp(7, currentTime);
+			prep.executeUpdate();
 			connect.close();
-		} catch (SQLException e) {
-			e.printStackTrace();
+		} catch (NullPointerException | SQLException e) {
+			//e.printStackTrace();
+			throw new IllegalArgumentException(e);
 		}
 	}
 	
@@ -576,12 +537,13 @@ public class Dpkm {
 				+ "Status='COMPROMISED', Compromised=true WHERE id = '%s'", id);
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
-				PreparedStatement writeDB = connect.prepareStatement(updateSwitch);) {
-			writeDB.executeUpdate(updateSwitch);
+				PreparedStatement prep = connect.prepareStatement(updateSwitch);) {
+			prep.executeUpdate(updateSwitch);
 			connect.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
+			//e.printStackTrace();
 			log.error("Failed to compromise the switch.");
+			throw new IllegalArgumentException(e);
 		}
 	}
 	
@@ -601,11 +563,12 @@ public class Dpkm {
 				ipv4Addr,ipv4AddrPeer);
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
-				PreparedStatement addPeer = connect.prepareStatement(addPeerQuery);) {
-			addPeer.executeUpdate(addPeerQuery);
+				PreparedStatement prep = connect.prepareStatement(addPeerQuery);) {
+			prep.executeUpdate(addPeerQuery);
 			connect.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
+			//e.printStackTrace();
+			throw new IllegalArgumentException(e);
 		}
 	}
 	
@@ -625,34 +588,25 @@ public class Dpkm {
 	 * of switch. 
 	 * @param ipv4Addr IPv4 Address of the source peer switch.
 	 * @param ipv4AddrPeer IPv4 Address of the target peer switch.
-	 * @param statusChange Integer used as a flag. 
+	 * @param statusChange String used as a flag. 
 	 */
-	protected void updatePeerInfo(String ipv4Addr, String ipv4AddrPeer, int statusChange) {
-		// Default status is CONNECTED.
-		String updateQuery = String.format("UPDATE cntrldb.CommunicatingPeers SET Status='CONNECTED'"
+	protected void updatePeerInfo(String ipv4Addr, String ipv4AddrPeer, String statusChange) {
+		// Set connection status to statusChange.
+		String updateQuery = String.format("UPDATE cntrldb.CommunicatingPeers SET Status='%s'"
 				+ "WHERE (PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
 				+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s')) OR "
 				+ "(PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
 				+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'));", 
-				ipv4Addr, ipv4AddrPeer, ipv4AddrPeer, ipv4Addr);
-		// Key linked to a peer interface has changed so connection status is KEY CHANGED. 
-		if (statusChange == 1) {
-			updateQuery = String.format("UPDATE cntrldb.CommunicatingPeers SET Status='KEY CHANGED'"
-					+ "WHERE (PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
-					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s')) OR "
-					+ "(PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
-					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'));", 
-					ipv4Addr, ipv4AddrPeer, ipv4AddrPeer, ipv4Addr);
-		}
+				statusChange, ipv4Addr, ipv4AddrPeer, ipv4AddrPeer, ipv4Addr);
 		// Key linked to a peer interface has been removed so connection status is REMOVED.
-		else if (statusChange == 2) {
+		if (statusChange.equalsIgnoreCase("REMOVED")) {
 			updateQuery = String.format("UPDATE cntrldb.CommunicatingPeers SET Status='REMOVED'"
 					+ " WHERE (PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') OR "
 					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'));", 
 					ipv4Addr, ipv4Addr);
 		}
 		// Communication started so connection status is COMMUNICATING.
-		else if (statusChange == 3) {
+		else if (statusChange.equalsIgnoreCase("COMMUNICATING")) {
 			updateQuery = String.format("UPDATE cntrldb.CommunicatingPeers SET Status='COMMUNICATING',"
 					+ "Communicating = true "
 					+ "WHERE (PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
@@ -661,50 +615,14 @@ public class Dpkm {
 					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'));", 
 					ipv4Addr, ipv4AddrPeer, ipv4AddrPeer, ipv4Addr);
 		}
-		// Maintain connection but only peer on one so connection status is PID1ONLY. 
-		else if (statusChange == 4) {
-			updateQuery = String.format("UPDATE cntrldb.CommunicatingPeers SET Status='PID1ONLY'"
-					+ "WHERE (PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
-					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s')) OR "
-					+ "(PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
-					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'));", 
-					ipv4Addr, ipv4AddrPeer, ipv4AddrPeer, ipv4Addr);
-		}
-		// Message sent to both but not confirmed so connection status is BOTH. 
-		else if (statusChange == 5) {
-			updateQuery = String.format("UPDATE cntrldb.CommunicatingPeers SET Status='BOTH'"
-					+ "WHERE (PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
-					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s')) OR "
-					+ "(PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
-					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'));", 
-					ipv4Addr, ipv4AddrPeer, ipv4AddrPeer, ipv4Addr);
-		}
-		// Both peer keys have changed so connection status is BOTH CHANGED. 
-		else if (statusChange == 6) {
-			updateQuery = String.format("UPDATE cntrldb.CommunicatingPeers SET Status='BOTH CHANGED'"
-					+ "WHERE (PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
-					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s')) OR "
-					+ "(PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
-					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'));", 
-					ipv4Addr, ipv4AddrPeer, ipv4AddrPeer, ipv4Addr);
-		}
-		
-		// Both peer keys have been removed from the interfaces so connection status is BOTH REMOVED. 
-		else if (statusChange == 7) {
-			updateQuery = String.format("UPDATE cntrldb.CommunicatingPeers SET Status='BOTH REMOVED'"
-					+ "WHERE (PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
-					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s')) OR "
-					+ "(PID1=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s') AND "
-					+ "PID2=(SELECT id FROM ConfiguredPeers WHERE IPv4Addr='%s'));", 
-					ipv4Addr, ipv4AddrPeer, ipv4AddrPeer, ipv4Addr);
-		}
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
-				PreparedStatement updateCon = connect.prepareStatement(updateQuery);) {
-			updateCon.executeUpdate(updateQuery);
+				PreparedStatement prep = connect.prepareStatement(updateQuery);) {
+			prep.executeUpdate(updateQuery);
 			connect.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
+			//e.printStackTrace();
+			throw new IllegalArgumentException(e);
 		}
 	}
 	
@@ -724,11 +642,12 @@ public class Dpkm {
 				ipv4Addr, ipv4Peer, ipv4Peer, ipv4Addr);
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
-				PreparedStatement removeCon = connect.prepareStatement(removeQuery);) {
-			removeCon.executeUpdate(removeQuery);
+				PreparedStatement prep = connect.prepareStatement(removeQuery);) {
+			prep.executeUpdate(removeQuery);
 			connect.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
+			//e.printStackTrace();
+			throw new IllegalArgumentException(e);
 		}
 	}
 	
@@ -742,11 +661,12 @@ public class Dpkm {
 				+ "IPv4Addr='%s';", ipv4Addr);
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
-				PreparedStatement removeCon = connect.prepareStatement(removeQuery);) {
-			removeCon.executeUpdate(removeQuery);
+				PreparedStatement prep = connect.prepareStatement(removeQuery);) {
+			prep.executeUpdate(removeQuery);
 			connect.close();
 		} catch (Exception e) {
-			e.printStackTrace();
+			//e.printStackTrace();
+			throw new IllegalArgumentException(e);
 		}
 	}
 }

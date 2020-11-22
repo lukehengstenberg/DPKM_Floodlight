@@ -38,11 +38,11 @@ public class DpkmRekeyResource extends ServerResource {
 			status = "Error! Could not parse switch info, see log for details.";
 			return ("{\"status\" : \"" + status + "\"}");
 		}
-		if(configureWG.checkCompromised(node.dpid)) {
+		if(configureWG.checkCompromised(node.getDpId())) {
 			status = "Error! Cannot rekey a compromised switch.";
 			return ("{\"status\" : \"" + status + "\"}");
 		}
-		configureWG.rekey(node.dpid, node.cryptoperiod);
+		configureWG.rekey(node.getDpId(), node.getCryptoperiod());
 		status = "DPKM_SET_KEY message sent to switch.";
 		return ("{\"status\" : \"" + status + "\"}");
 	}

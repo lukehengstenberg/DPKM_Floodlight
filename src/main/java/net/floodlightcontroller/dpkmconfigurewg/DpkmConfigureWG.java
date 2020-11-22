@@ -212,7 +212,14 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 	private void processStatusMessage(IOFSwitch sw, OFDpkmStatus msg) {
 		// Executed if the status response shows WG has been configured.
 		if(msg.getStatusFlag() == OFDpkmStatusFlag.DPKM_STATUS_FLAG_CONFIGURED) {
-			processConfigured(sw, msg);
+			DpkmSwitch node = new DpkmSwitch();
+			node.setDpId(sw.getId().toString());
+			node.setCryptoperiod(currentCryptoperiod);
+			node.setIpv4Addr(msg.getIpv4Addr());
+			node.setIpv4AddrWG(msg.getIpv4Wg());
+			node.setPubKey1(msg.getKey());
+			node.setStatus("CONFIGURED");
+			processConfigured(sw, node);
 		}
 		// Executed if the status response shows a peer has been added.
 		if(msg.getStatusFlag() == OFDpkmStatusFlag.DPKM_STATUS_FLAG_PEER_ADDED) {
@@ -234,15 +241,17 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 	 * @param sw Instance of a switch connected to the controller.
 	 * @param msg The received OpenFlow DPKM Status message.
 	 */
-	private synchronized void processConfigured(IOFSwitch sw, OFDpkmStatus msg) {
+	private synchronized void processConfigured(IOFSwitch sw, DpkmSwitch node) {
 		log.info(String.format("Switch %s has been configured successfully.", 
 				sw.getId().toString()));
+		String ipv4 = node.getIpv4Addr();
 		// Adds the new WG switch to the database.
-		if(checkIPExists(msg.getIpv4Addr()).equals("0")) {
-			writeSwitchToDB(msg, sw);
+		if(checkIPExists(ipv4).equals("0")) {
+			writeSwitchToDB(node);
+			
 			// Checks for and adds any configured switches as peers. 
 			if(checkConfigured() >= 2) {
-				constructAddPeerMessage(sw, msg.getIpv4Addr());
+				constructAddPeerMessage(sw, ipv4);
 			}
 			else if(checkConfigured() == 1) {
 				log.info("No Peers to be added.");
@@ -251,37 +260,36 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 			}
 		} 
 		// Logs if controller fails to access the database. 
-		else if(checkIPExists(msg.getIpv4Addr()).equals("Error")) {
+		else if(checkIPExists(ipv4).equals("Error")) {
 			log.error("An error was encountered when adding switch info to DB.");
 		} else {
 			// Updates existing switch details for new configuration. 
-			updateSwitchInDB(msg,sw);
+			updateSwitchInDB(node);
 			
 			// If switch has peers then deletes peer on one or both interfaces based on state.
-			if(checkConnectedAny(msg.getIpv4Addr()) > 0) {
-				String ipv4 = msg.getIpv4Addr();
+			if(checkConnectedAny(ipv4) > 0) {
 				Iterator<DpkmPeers> iter = getPeers().iterator();
 				// Loop through peer connections.
 				while (iter.hasNext()) {
 					DpkmPeers p = iter.next();
 					// If status is switch A key changed then
-					if (checkConnected(ipv4, p.ipv4AddrB, 1) > 0) {
+					if (checkConnected(ipv4, p.ipv4AddrB, "KEY CHANGED") > 0) {
 						// update to 'PID1ONLY' (for later use),
-						updatePeerInfo(ipv4, p.ipv4AddrB, 4);
+						updatePeerInfo(ipv4, p.ipv4AddrB, "PID1ONLY");
 						// remove switch A old key from switch B.
 						sendDeletePeerMessage(p.dpidB, p.dpidA, true);
 					}
 					// If status is switch B key changed then
-					else if (checkConnected(p.ipv4AddrA, ipv4, 1) > 0) {
+					else if (checkConnected(p.ipv4AddrA, ipv4, "KEY CHANGED") > 0) {
 						// update to 'PID1ONLY' (for later use),
-						updatePeerInfo(p.ipv4AddrA, ipv4, 4);
+						updatePeerInfo(p.ipv4AddrA, ipv4, "PID1ONLY");
 						// remove switch B old key from switch A.
 						sendDeletePeerMessage(p.dpidA, p.dpidB, true);
 					}
 					// If status is both keys changed then
-					else if (checkConnected(ipv4, p.ipv4AddrB, 6) > 0) {
+					else if (checkConnected(ipv4, p.ipv4AddrB, "BOTH CHANGED") > 0) {
 						// update to 'BOTH REMOVED' (for later use),
-						updatePeerInfo(ipv4, p.ipv4AddrB, 7);
+						updatePeerInfo(ipv4, p.ipv4AddrB, "BOTH REMOVED");
 						// remove old keys from both interfaces. 
 						sendDeletePeerMessage(p.dpidA, p.dpidB, true);
 						sendDeletePeerMessage(p.dpidB, p.dpidA, true);
@@ -305,19 +313,19 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 				sw.getId().toString(), getDpId(msg.getIpv4Peer(), 0, false)));
 		// If connection is 'PID1ONLY' (4) only one switch has established connection.
 		// Sends an add peer message to target peer, adding peer info to both WG interfaces.
-		if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 4) > 0) {
+		if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), "PID1ONLY") > 0) {
 			sendAddPeerMessage(getDpId(msg.getIpv4Peer(), 0, false), sw.getId().toString());
 		}
 		// If connection is established on both, update peer connection status. 
-		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 5) > 0) {
+		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), "BOTH") > 0) {
 			// 0 == CONNECTED. 
-			updatePeerInfo(msg.getIpv4Addr(), msg.getIpv4Peer(), 0);
+			updatePeerInfo(msg.getIpv4Addr(), msg.getIpv4Peer(), "CONNECTED");
 			log.info(String.format("Full connection established between switch %s and switch %s.", 
 					sw.getId().toString(), getDpId(msg.getIpv4Peer(), 0, false)));
 			// If connection was communicating, update peer connection status.
-			if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 3) > 0) {
+			if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), "COMMUNICATING") > 0) {
 				// 3 == COMMUNICATING. 
-				updatePeerInfo(msg.getIpv4Addr(), msg.getIpv4Peer(), 3);
+				updatePeerInfo(msg.getIpv4Addr(), msg.getIpv4Peer(), "COMMUNICATING");
 				IOFSwitch peer = switchService.getSwitch(DatapathId.of(getDpId(
 						msg.getIpv4Peer(), 0, false)));
 				// Restore previous flow configuration to continue encryption.
@@ -325,7 +333,7 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 			} 
 		} 
 		// If connection is 'CONNECTED' on both, confirm success.
-		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 0) > 0) {
+		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), "CONNECTED") > 0) {
 			log.info(String.format("Full connection established between switch %s and switch %s.", 
 					sw.getId().toString(), getDpId(msg.getIpv4Peer(), 0, false)));
 		} else {
@@ -343,7 +351,7 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 		log.info(String.format("Switch %s has successfully removed %s as a WG peer.", 
 				sw.getId().toString(), getDpId(msg.getIpv4Peer(), 0, false)));
 		// Remove connection if exists and status 'REMOVED' (key removed).
-		if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 2) > 0) {
+		if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), "REMOVED") > 0) {
 			removePeerConnection(msg.getIpv4Addr(),msg.getIpv4Peer());
 			// Remove switch if no remaining peer connections.
 			if(checkConnectedAny(msg.getIpv4Peer()) == 0) {
@@ -352,23 +360,23 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 		}
 		// Called if a new connection has been added (PID1ONLY) whilst awaiting second
 		// DELETE_PEER message response. 
-		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 4) > 0) {
+		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), "PID1ONLY") > 0) {
 			// Re-add other half of the peer connections with new key.
 			sendAddPeerMessage(sw.getId().toString(), getDpId(msg.getIpv4Peer(), 0, false));
 		}
 		// Called if connection is removed from both interfaces (BOTH REMOVED), but should
 		// be rebuilt. 
-		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 7) > 0) {
+		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), "BOTH REMOVED") > 0) {
 			sendAddPeerMessage(sw.getId().toString(), getDpId(msg.getIpv4Peer(), 0, false));
 		}
 		// Sends delete peer message to target peer, deleting peer info on both WG interfaces. (if exists).
 		// Removes connection from db. 
-		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 0) > 0) {
+		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), "CONNECTED") > 0) {
 			sendDeletePeerMessage(getDpId(msg.getIpv4Peer(), 0, false), sw.getId().toString(), false);
 			removePeerConnection(msg.getIpv4Addr(),msg.getIpv4Peer());
 		}
 		// Connection removed from both switches. 
-		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), 0) == 0) {
+		else if(checkConnected(msg.getIpv4Addr(), msg.getIpv4Peer(), "CONNECTED") == 0) {
 			log.info("Peer removed from both switches.");
 		}
 	}
@@ -386,7 +394,7 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 		// Otherwise, remove switch from db. 
 		if(checkConnectedAny(msg.getIpv4Addr()) >= 1) {
 			// 2 == key removed.
-			updatePeerInfo(msg.getIpv4Addr(), msg.getIpv4Peer(), 2);
+			updatePeerInfo(msg.getIpv4Addr(), msg.getIpv4Peer(), "REMOVED");
 			Iterator<DpkmPeers> iter = getPeers().iterator();
 			while (iter.hasNext()) {
 				DpkmPeers p = iter.next();
@@ -419,7 +427,7 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 					.build();
 			sw.write(setKeyMsg);
 		} catch(Exception e) {
-			e.printStackTrace();;
+			e.printStackTrace();
 			log.error("Unable to send DPKM_SET_KEY message.");
 		}
 	}
@@ -461,14 +469,14 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 				try (ResultSet rs = get.getResultSet()) {
 	    			while (rs.next()) {
 	    				DpkmSwitch cSwitch = new DpkmSwitch();
-	    				cSwitch.id = rs.getInt("id");
-	    				cSwitch.dpid = rs.getString("Dpid");
-	    				cSwitch.ipv4Addr = rs.getString("IPv4Addr");
-	    				cSwitch.ipv4AddrWG = rs.getString("IPv4AddrWG");
-	    				cSwitch.cryptoperiod = rs.getInt("Cryptoperiod");
-	    				cSwitch.status = rs.getString("Status");
-	    				cSwitch.compromised = rs.getBoolean("Compromised");
-	    				cSwitch.since = dateFormat.format(rs.getTimestamp("Since"));
+	    				cSwitch.setId(rs.getInt("id"));
+	    				cSwitch.setDpId(rs.getString("Dpid"));
+	    				cSwitch.setIpv4Addr(rs.getString("IPv4Addr"));
+	    				cSwitch.setIpv4AddrWG(rs.getString("IPv4AddrWG"));
+	    				cSwitch.setCryptoperiod(rs.getInt("Cryptoperiod"));
+	    				cSwitch.setStatus(rs.getString("Status"));
+	    				cSwitch.setCompromised(rs.getBoolean("Compromised"));
+	    				cSwitch.setSince(dateFormat.format(rs.getTimestamp("Since")));
 	    				confSwitches.add(cSwitch);
 	    			}
 	    			isResult = get.getMoreResults();
@@ -622,7 +630,7 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 			peerA.write(flowA);
 			peerB.write(flowB);
 			// Update DB status, 3 == start communication.
-			updatePeerInfo(ipv4A, ipv4B, 3);
+			updatePeerInfo(ipv4A, ipv4B, "COMMUNICATING");
 			log.info(String.format("Communication between switch %s and switch %s started.",dpidA,dpidB));
 		}
 		catch(Exception e) {
@@ -683,14 +691,14 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
     					DpkmPeers p = iter.next();
     					if (p.ipv4AddrA.equalsIgnoreCase(ipv4) || 
     							p.ipv4AddrB.equalsIgnoreCase(ipv4)) {
-    						if (checkConnected(p.ipv4AddrA, p.ipv4AddrB, 1) > 0) {
+    						if (checkConnected(p.ipv4AddrA, p.ipv4AddrB, "KEY CHANGED") > 0) {
     							// 6 == both keys changed.
-    							updatePeerInfo(p.ipv4AddrA, p.ipv4AddrB, 6);
+    							updatePeerInfo(p.ipv4AddrA, p.ipv4AddrB, "BOTH CHANGED");
     						} else {
     							// 1 == key changed.
-    							updatePeerInfo(p.ipv4AddrA, p.ipv4AddrB, 1);
+    							updatePeerInfo(p.ipv4AddrA, p.ipv4AddrB, "KEY CHANGED");
     							// If communicating temporarily redirect flow to normal port.
-    							if (checkConnected(p.ipv4AddrA, p.ipv4AddrB, 3) > 0) {
+    							if (checkConnected(p.ipv4AddrA, p.ipv4AddrB, "COMMUNICATING") > 0) {
     								IOFSwitch peerA = switchService
     										.getSwitch(DatapathId.of(p.dpidA));
     								IOFSwitch peerB = switchService

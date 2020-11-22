@@ -6,6 +6,9 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.util.Properties;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /** 
  * Provides a connection to the underlying DPKM database using the credentials
  * stored in the db.properties file. </br>
@@ -14,6 +17,7 @@ import java.util.Properties;
  * @version 1.0
  */
 public class ConnectionProvider {
+	protected static Logger log = LoggerFactory.getLogger(DpkmConfigureWG.class);
 	static Properties prop = getCredentials();
     private static final String url = prop.getProperty("db.url");
     private static final String user = prop.getProperty("db.user");
@@ -22,7 +26,7 @@ public class ConnectionProvider {
     	try {
     		return DriverManager.getConnection(url, user, password);
     	} catch(Exception e) {
-    		System.out.println("Failed to get connection to db.");
+    		log.error("Failed to get connection to db.");
     		return null;
     	}
     }
@@ -31,7 +35,7 @@ public class ConnectionProvider {
 		try (FileInputStream in = new FileInputStream("src/main/resources/db.properties")){
 			prop.load(in);
 		} catch (IOException e) {
-			System.out.println("Failed to access properties file.");
+			log.error("Failed to access properties file.");
 		}
 		return prop;
 	}

@@ -36,7 +36,7 @@ public class DpkmCompromiseNodeResource extends ServerResource {
 			return ("{\"status\" : \"" + status + "\"}");
 		}
 
-		configureWG.compromiseNode(node.id);
+		configureWG.compromiseNode(node.getId());
 		status = "Node has been compromised.";
 		return ("{\"status\" : \"" + status + "\"}");
 	}

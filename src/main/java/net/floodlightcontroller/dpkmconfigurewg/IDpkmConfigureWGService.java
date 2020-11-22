@@ -65,7 +65,7 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
 	 * @param statusType Integer used as a flag. 
 	 * @return int Connection count or error (-1).
 	 */
-    public int checkConnected(String ipv4AddrA, String ipv4AddrB, int statusType);
+    public int checkConnected(String ipv4AddrA, String ipv4AddrB, String statusType);
     
     /** 
 	 * Writes a DPKM_ADD_PEER message to the switch with the given source dpid,

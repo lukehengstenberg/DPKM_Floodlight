@@ -334,11 +334,11 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 			log.error(note);
 			updateMaxAttempt(dpid, errCode, "ACTION NEEDED");	
 			// Remove the intermediate peer connection record.
-			if(checkConnected(ipv4A,ipv4Peer,4) > 0) {
+			if(checkConnected(ipv4A,ipv4Peer,"PID1ONLY") > 0) {
 				removePeerConnection(ipv4A,ipv4Peer);
 			}
 			// Remove the faulty switch as a peer on the working switch.
-			else if(checkConnected(ipv4A,ipv4Peer,5) > 0) {
+			else if(checkConnected(ipv4A,ipv4Peer,"BOTH") > 0) {
 				removePeerConnection(ipv4A,ipv4Peer);
 				confWGService.sendDeletePeerMessage(peerDpid, dpid, false);
 			}
@@ -350,13 +350,13 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 					attempt, dpid, note));
 			updateAttempt(dpid,errCode);
 			// Remove the intermediate peer connection record and try again.
-			if(checkConnected(ipv4A,ipv4Peer,4) > 0) {
+			if(checkConnected(ipv4A,ipv4Peer,"PID1ONLY") > 0) {
 				removePeerConnection(ipv4A,ipv4Peer);
 				confWGService.sendAddPeerMessage(dpid, peerDpid);
 			}
 			// Update to show only half the connection is made and try again.
-			else if(checkConnected(ipv4A,ipv4Peer,5) > 0) {
-				updatePeerInfo(ipv4A,ipv4Peer,4);
+			else if(checkConnected(ipv4A,ipv4Peer,"BOTH") > 0) {
+				updatePeerInfo(ipv4A,ipv4Peer,"PID1ONLY");
 				confWGService.sendAddPeerMessage(dpid, peerDpid);
 			}
 		} else {

@@ -50,7 +50,7 @@ public class DpkmEndCommunicationResource extends ServerResource {
 				break;
 			}
 		}
-		if (configureWG.checkConnected(peers.ipv4AddrA, peers.ipv4AddrB, 3) == 0) {
+		if (configureWG.checkConnected(peers.ipv4AddrA, peers.ipv4AddrB, "COMMUNICATING") == 0) {
 			status = "Error! These peers are not communicating.";
 			log.error(status);
 			return ("{\"status\" : \"" + status + "\"}");

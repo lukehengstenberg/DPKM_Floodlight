@@ -35,9 +35,9 @@ public class DpkmRevocationResource extends ServerResource{
 			log.error(status);
 			return ("{\"status\" : \"" + status + "\"}");
 		}
-		configureWG.revoke(node.dpid, node.status);
+		configureWG.revoke(node.getDpId(), node.getStatus());
 		status = "Node has been fully terminated.";
-		if(node.status.equalsIgnoreCase("reConf")) {
+		if(node.getStatus().equalsIgnoreCase("reConf")) {
 			status = "Node has been reconfigured.";
 		}
 		return ("{\"status\" : \"" + status + "\"}");

@@ -66,13 +66,13 @@ public class DpkmConfigureWGResource extends ServerResource {
 			log.error(status);
 			return ("{\"status\" : \"" + status + "\"}");
 		}
-		if(configureWG.checkError(node.dpid) > 0) {
+		if(configureWG.checkError(node.getDpId()) > 0) {
 			status = "Switch has an unresolved error that requires administrator "
 					+ "attention. See log for details.";
 			log.error(status);
 			return ("{\"status\" : \"" + status + "\"}");
 		}
-		configureWG.sendSetKeyMessage(DatapathId.of(node.dpid), node.cryptoperiod);
+		configureWG.sendSetKeyMessage(DatapathId.of(node.getDpId()), node.getCryptoperiod());
 		status = "DPKM_SET_KEY message sent to switch.";
 		return ("{\"status\" : \"" + status + "\"}");
 	}
@@ -100,8 +100,8 @@ public class DpkmConfigureWGResource extends ServerResource {
 		// Loop through switch records to find switch information.
 		while (iter.hasNext()) {
 			DpkmSwitch s = iter.next();
-			if (s.id == node.id) {
-				node.dpid = s.dpid;
+			if (s.getId() == node.getId()) {
+				node.setDpId(s.getDpId());
 				exists = true;
 				break;
 			}
@@ -111,7 +111,7 @@ public class DpkmConfigureWGResource extends ServerResource {
 			log.error(status);
 			return ("{\"status\" : \"" + status + "\"}");
 		} else {
-			configureWG.sendDeleteKeyMessage(DatapathId.of(node.dpid));
+			configureWG.sendDeleteKeyMessage(DatapathId.of(node.getDpId()));
 			status = "DPKM_DELETE_KEY message sent to switch.";
 			return ("{\"status\" : \"" + status + "\"}");
 		}
@@ -141,7 +141,6 @@ public class DpkmConfigureWGResource extends ServerResource {
 				if (jp.getCurrentToken() != JsonToken.FIELD_NAME) {
 					throw new IOException("Expected FIELD_NAME");
 				}
-				
 				String n = jp.getCurrentName();
 				jp.nextToken();
 				if (jp.getText().equals("")) {
@@ -149,7 +148,7 @@ public class DpkmConfigureWGResource extends ServerResource {
 				}
 				if (n.equalsIgnoreCase("id")) {
 					try {
-						node.id = Integer.parseInt(jp.getText());
+						node.setId(Integer.parseInt(jp.getText()));
 					} catch (NumberFormatException e) {
 						log.error("Unable to parse switch id: {}", jp.getText());
 						//TODO should return some error message via HTTP message
@@ -157,7 +156,7 @@ public class DpkmConfigureWGResource extends ServerResource {
 				}
 				else if (n.equalsIgnoreCase("switchid")) {
 					try {
-						node.dpid = jp.getText();
+						node.setDpId(jp.getText());
 					} catch (IllegalArgumentException e) {
 						log.error("Unable to parse switch DPID: {}", jp.getText());
 						//TODO should return some error message via HTTP message
@@ -165,7 +164,7 @@ public class DpkmConfigureWGResource extends ServerResource {
 				}
 				else if (n.equalsIgnoreCase("cryptoperiod")) {
 					try {
-						node.cryptoperiod = Integer.parseInt(jp.getText());
+						node.setCryptoperiod(Integer.parseInt(jp.getText()));
 					} catch (NumberFormatException e) {
 						log.error("Unable to parse cryptoperiod: {}", jp.getText());
 						//TODO should return some error message via HTTP message
@@ -173,7 +172,7 @@ public class DpkmConfigureWGResource extends ServerResource {
 				}
 				else if (n.equalsIgnoreCase("revType")) {
 					try {
-						node.status = jp.getText();
+						node.setStatus(jp.getText());
 					} catch (IllegalArgumentException e) {
 						log.error("Unable to parse revType: {}", jp.getText());
 						//TODO should return some error message via HTTP message

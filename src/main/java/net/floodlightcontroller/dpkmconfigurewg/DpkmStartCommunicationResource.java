@@ -48,7 +48,7 @@ public class DpkmStartCommunicationResource extends ServerResource {
 				break;
 			}
 		}
-		if (configureWG.checkConnected(peers.ipv4AddrA, peers.ipv4AddrB, 3) > 0) {
+		if (configureWG.checkConnected(peers.ipv4AddrA, peers.ipv4AddrB, "COMMUNICATING") > 0) {
 			status = "Error! These peers are already communicating.";
 			log.error(status);
 			return ("{\"status\" : \"" + status + "\"}");
