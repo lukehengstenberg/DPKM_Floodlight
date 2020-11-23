@@ -61,17 +61,10 @@ public class DpkmFlows extends Dpkm{
 		String ipv4B = getIp(peerB.getId().toString(),false);
 		// Create match conditions for switch.
 		Match dpkmMatch = peerA.getOFFactory().buildMatch()
-				//.setExact(MatchField.DPKM_METHOD, U8.of((short) 1))
-				.setExact(MatchField.IN_PORT, OFPort.of(2))
-				//.setExact(MatchField.ETH_SRC, MacAddress.of(peerA.getId()))
-				//.setExact(MatchField.ETH_DST, MacAddress.of(peerB.getId()))
+				.setExact(MatchField.DPKM_METHOD, U8.of((short) 1))
+				.setExact(MatchField.IN_PORT, OFPort.LOCAL)
 				.setExact(MatchField.ETH_TYPE, EthType.IPv4)
-				//.setMasked(MatchField.IPV4_SRC, IPv4AddressWithMask.of(ipv4A + "/24"))
-				//.setMasked(MatchField.IPV4_DST, IPv4AddressWithMask.of(ipv4B + "/24"))
 				.setExact(MatchField.IPV4_DST, IPv4Address.of(ipv4B))
-				//.setExact(MatchField.IP_PROTO, IpProtocol.UDP)
-				//.setExact(MatchField.UDP_SRC, TransportPort.of(51820))
-				//.setExact(MatchField.UDP_DST, TransportPort.of(51820))
 				.build();
 		ArrayList<OFAction> actionList = new ArrayList<OFAction>();
 		OFActions actions = peerA.getOFFactory().actions();
@@ -120,23 +113,36 @@ public class DpkmFlows extends Dpkm{
 	}
 	
 	/** 
-	 * Constructs a FLOW_DELETE message for removing an existing flow and 
-	 * dropping any packets on peerA destined to peerB. 
+	 * Constructs a FLOW_MOD message for modifying an existing flow to 
+	 * drop any packets on peerA destined to peerB. 
 	 * @param peerA IOFSwitch instance of a switch A.
 	 * @param peerB IOFSwitch instance of a switch B.
-	 * @return OFFlowDelete message deleting flow between peerA and peerB.
+	 * @return OFFlowModify message dropping packets between peerA and peerB.
 	 */
-	protected OFFlowDelete constructFlowDelete(IOFSwitch peerA, IOFSwitch peerB) {
+	protected OFFlowModify constructFlowDrop(IOFSwitch peerA, IOFSwitch peerB) {
+		// Create blank action list for switch (blank = drop packet).
+		ArrayList<OFAction> actionList = new ArrayList<OFAction>();
+		// Write instruction to apply action list to packet on switch end.
+		OFInstructionApplyActions applyActions = peerA.getOFFactory()
+				.instructions().buildApplyActions()
+				.setActions(actionList)
+				.build();
+		ArrayList<OFInstruction> instructionList = new ArrayList<OFInstruction>();
+		instructionList.add(applyActions);
 		// Recreate identical flow to the existing.
 		OFFlowAdd flow = constructFlowAdd(peerA, peerB);
-		// Convert to flow delete.
-		OFFlowDelete flowDelete = FlowModUtils.toFlowDelete(flow);
-		return flowDelete;
+		// Use the flow as a builder to actions. 
+		OFFlowAdd newFlow = flow.createBuilder()
+				.setInstructions(instructionList)
+				.build();
+				
+		OFFlowModify flowModify = FlowModUtils.toFlowModify(newFlow);
+		return flowModify;
 	}
 	
 	/** 
-	 * Constructs a FLOW_MODIFY message for changing an existing flow and 
-	 * routing any packets on peerA destined to peerB through the normal port.</br>
+	 * Constructs a FLOW_MOD message for changing an existing flow and 
+	 * routing any packets on peerA destined to peerB via the controller.</br>
 	 * This means packets will not be encrypted and sent through WG. 
 	 * @param peerA IOFSwitch instance of a switch A.
 	 * @param peerB IOFSwitch instance of a switch B.
@@ -149,7 +155,7 @@ public class DpkmFlows extends Dpkm{
 		// Set action to output via normal port.
 		OFActionOutput output = actions.buildOutput()
 				.setMaxLen(0xffFFffFF)
-				.setPort(OFPort.LOCAL)
+				.setPort(OFPort.CONTROLLER)
 				.build();
 		actionList.add(output);
 		// Write instruction to apply action list to packet on switch end.

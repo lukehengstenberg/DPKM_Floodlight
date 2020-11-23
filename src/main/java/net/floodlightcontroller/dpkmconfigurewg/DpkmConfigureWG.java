@@ -662,9 +662,9 @@ public class DpkmConfigureWG extends DpkmFlows implements IFloodlightModule, IDp
 			peerB.write(flowB);
 			log.info(String.format("Communication between switch %s and switch %s now unencrypted.",dpidA,dpidB));
 		} else {
-			OFFlowDelete flowA = constructFlowDelete(peerA, peerB);
-			OFFlowDelete flowB = constructFlowDelete(peerB, peerA);
-			// Write FLOW_MOD (DELETE) messages to switches.
+			OFFlowModify flowA = constructFlowDrop(peerA, peerB);
+			OFFlowModify flowB = constructFlowDrop(peerB, peerA);
+			// Write FLOW_MOD (DROP) messages to switches.
 			peerA.write(flowA);
 			peerB.write(flowB);
 			log.info(String.format("Communication between switch %s and switch %s ended.",dpidA,dpidB));
