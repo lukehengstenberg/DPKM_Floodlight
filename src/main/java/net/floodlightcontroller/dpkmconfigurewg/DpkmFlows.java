@@ -12,6 +12,7 @@ import org.projectfloodlight.openflow.protocol.action.OFActionSetField;
 import org.projectfloodlight.openflow.protocol.action.OFActions;
 import org.projectfloodlight.openflow.protocol.instruction.OFInstruction;
 import org.projectfloodlight.openflow.protocol.instruction.OFInstructionApplyActions;
+import org.projectfloodlight.openflow.protocol.instruction.OFInstructionClearActions;
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.protocol.oxm.OFOxms;
@@ -120,18 +121,14 @@ public class DpkmFlows extends Dpkm{
 	 * @return OFFlowModify message dropping packets between peerA and peerB.
 	 */
 	protected OFFlowModify constructFlowDrop(IOFSwitch peerA, IOFSwitch peerB) {
-		// Create blank action list for switch (blank = drop packet).
-		ArrayList<OFAction> actionList = new ArrayList<OFAction>();
-		// Write instruction to apply action list to packet on switch end.
-		OFInstructionApplyActions applyActions = peerA.getOFFactory()
-				.instructions().buildApplyActions()
-				.setActions(actionList)
-				.build();
+		// Instruction to clear action list on switch end, dropping packet.
+		OFInstructionClearActions clearActions = peerA.getOFFactory()
+				.instructions().clearActions();
 		ArrayList<OFInstruction> instructionList = new ArrayList<OFInstruction>();
-		instructionList.add(applyActions);
+		instructionList.add(clearActions);
 		// Recreate identical flow to the existing.
 		OFFlowAdd flow = constructFlowAdd(peerA, peerB);
-		// Use the flow as a builder to actions. 
+		// Use the flow as a builder to update instruction. 
 		OFFlowAdd newFlow = flow.createBuilder()
 				.setInstructions(instructionList)
 				.build();
