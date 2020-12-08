@@ -11,13 +11,14 @@ import org.slf4j.LoggerFactory;
 
 /** 
  * Internal functionality for the Dpkm error handler. </br>
- * Used to interact with the database after some error has been encountered.  
+ * Used to interact with the database after an OpenFlow error is reported.  
  * 
  * @author Luke Hengstenberg
  * @version 1.0
  */
-public class DpkmError extends Dpkm{
-	protected static Logger log = LoggerFactory.getLogger(DpkmErrorHandler.class);
+public class DpkmError extends Dpkm {
+	protected static Logger log = 
+			LoggerFactory.getLogger(DpkmErrorHandler.class);
 	
 	/** 
 	 * Updates the database by inserting a new record into table ErrorLog for 
@@ -26,13 +27,16 @@ public class DpkmError extends Dpkm{
 	 * @param type DPKM message type that caused the error.
 	 * @param errCode Error code identifying a specific error. 
 	 * @param note Extra information about the error. 
+	 * @exception SQLException if SQL query to db fails.
 	 */
-	protected void logError(String dpid, String type, String errCode, String note) {
-		String sql = "INSERT INTO cntrldb.ErrorLog VALUES (default, ?, ?, ?, ?, ?, ?)";
+	protected void logError(String dpid, String type, String errCode, 
+			String note) {
+		String sql = "INSERT INTO cntrldb.ErrorLog "
+				+ "VALUES (default, ?, ?, ?, ?, ?, ?)";
 		// Connects to the database and executes the SQL statement.
 		try(Connection connect = ConnectionProvider.getConn();
 				PreparedStatement writeDB = connect.prepareStatement(sql);) {
-			// Dpid, Type, ErrCode, Attempt, Resolved, Note
+			// Dpid, Type, ErrCode, Attempt, Resolved, Note.
 	        writeDB.setString(1, dpid);
 	        writeDB.setString(2, type);
 	        writeDB.setString(3, errCode);
@@ -42,7 +46,6 @@ public class DpkmError extends Dpkm{
 	        writeDB.executeUpdate();
 	        connect.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
 			log.error("Failed to log error message in database.");
 		}
 	}
@@ -52,7 +55,8 @@ public class DpkmError extends Dpkm{
 	 * not been resolved. 
 	 * @param dpid DatapathId of a switch.
 	 * @param errCode Error code identifying a specific error. 
-	 * @return error count or -1.  
+	 * @return error count or -1.
+	 * @exception SQLException if SQL query to db fails.  
 	 */
 	protected int checkErrorCount(String dpid, String errCode) {
 		String checkQ = String.format("SELECT COUNT(*) FROM cntrldb.ErrorLog "
@@ -72,8 +76,7 @@ public class DpkmError extends Dpkm{
 	    	} while (isResult);
 	    	connect.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
-			log.error("Failed to log error message in database.");
+			log.error("Failed to check error count in database.");
 		}
 		return -1;
 	}
@@ -82,10 +85,11 @@ public class DpkmError extends Dpkm{
 	 * Gets the number of attempts switch dpid has had at sending a message 
 	 * causing error code errCode.</br>
 	 * Used to implement a limit to the number of times the controller can
-	 * resend a particular message.  
+	 * resend a request.  
 	 * @param dpid DatapathId of a switch.
 	 * @param errCode Error code identifying a specific error. 
-	 * @return number of attempts or -1.  
+	 * @return number of attempts or -1.
+	 * @exception SQLException if SQL query to db fails. 
 	 */
 	protected int checkAttempt(String dpid, String errCode) {
 		String checkQ = String.format("SELECT Attempt FROM cntrldb.ErrorLog "
@@ -105,8 +109,7 @@ public class DpkmError extends Dpkm{
 	    	} while (isResult);
 	    	connect.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
-			log.error("Failed to log error message in database.");
+			log.error("Failed to check error attempts in database.");
 		}
 		return -1;
 	}
@@ -115,7 +118,8 @@ public class DpkmError extends Dpkm{
 	 * Updates number of attempts for error errCode reported by switch dpid. </br>
 	 * Increments Attempt by 1, used to record the number of retries.   
 	 * @param dpid DatapathId of the switch that reported the error.
-	 * @param errCode Error code identifying a specific error. 
+	 * @param errCode Error code identifying a specific error.
+	 * @exception SQLException if SQL query to db fails.
 	 */
 	protected void updateAttempt(String dpid, String errCode) {
 		String update = ("UPDATE cntrldb.ErrorLog SET Attempt = Attempt + 1 WHERE "
@@ -129,7 +133,7 @@ public class DpkmError extends Dpkm{
 			connect.close();
 		} catch (SQLException e) {
 			e.printStackTrace();
-			log.error("Failed to log error message in database.");
+			log.error("Failed to update request attempts in database.");
 		}
 	}
 	
@@ -138,7 +142,8 @@ public class DpkmError extends Dpkm{
 	 * note of a record to provide information to the administrator.    
 	 * @param dpid DatapathId of the switch that reported the error.
 	 * @param errCode Error code identifying a specific error.
-	 * @param note Extra information about the error. 
+	 * @param note Extra information about the error.
+	 * @exception SQLException if SQL query to db fails. 
 	 */
 	protected void updateMaxAttempt(String dpid, String errCode, String note) {
 		String update = ("UPDATE cntrldb.ErrorLog SET Note = ? "
@@ -152,8 +157,7 @@ public class DpkmError extends Dpkm{
 			writeDB.executeUpdate();
 			connect.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
-			log.error("Failed to log error message in database.");
+			log.error("Failed to set max request attempts in database.");
 		}
 	}
 	
@@ -163,6 +167,7 @@ public class DpkmError extends Dpkm{
 	 * Updates resolved to true for all records of matching type.    
 	 * @param dpid DatapathId of the switch that reported the error.
 	 * @param type DPKM message type that previously caused an error.
+	 * @exception SQLException if SQL query to db fails.
 	 */
 	protected void resolveError(String dpid, String type) {
 		String update = ("UPDATE cntrldb.ErrorLog SET Resolved = true, "
@@ -176,16 +181,16 @@ public class DpkmError extends Dpkm{
 			writeDB.executeUpdate();
 			connect.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
-			log.error("Failed to log error message in database.");
+			log.error("Failed to resolve error in database.");
 		}
 	}
 	
 	/** 
-	 * Extracts the ipv4 address from an error message as a substring of the toString(). </br>
+	 * Extracts the ipv4 address from an error message as a substring of the 
+	 * toString(). </br>
 	 * Used to recreate the same add/delete peer message and retry.     
 	 * @param inError OFDpkmBaseError received from the switch.
-	 * @return ipv4 address extracted from the toString of version of the error message.  
+	 * @return ipv4 address extracted from the toString of the error message.  
 	 */
 	protected String extractIp(OFDpkmBaseError inError) {
 		String msg = inError.getData().toString();
@@ -198,7 +203,8 @@ public class DpkmError extends Dpkm{
 	 * Gets the IP address of a switch matching a specific public key. </br>
 	 * Used in circumstances where an error is caused by a missing IP address.     
 	 * @param key Public Key of a switch.
-	 * @return ipv4 address of the switch with a matching public key or error.  
+	 * @return ipv4 address of the switch with a matching public key or error.
+	 * @exception SQLException if SQL query to db fails.  
 	 */
 	protected String getIpFromKey(String key) {
 		String getSQL = String.format("SELECT IPv4Addr FROM ConfiguredPeers WHERE "
@@ -218,7 +224,7 @@ public class DpkmError extends Dpkm{
 	    	} while (isResult);
 	    	connect.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
+			log.error("Failed to get IP address from the database.");
 		}
     	return("Error");
 	}

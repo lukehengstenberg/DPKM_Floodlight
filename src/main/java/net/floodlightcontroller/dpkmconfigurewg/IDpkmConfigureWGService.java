@@ -1,5 +1,6 @@
 package net.floodlightcontroller.dpkmconfigurewg;
 
+import java.sql.SQLException;
 import java.util.List;
 
 import org.projectfloodlight.openflow.types.DatapathId;
@@ -20,7 +21,9 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
 	/** 
 	 * Returns a full list of configured switches from the db, mapping fields
 	 * to DpkmSwitch objects. 
-	 * @return List<DpkmSwitch> List of WG switches in db. 
+	 * @return List<DpkmSwitch> List of WG switches in db.
+	 * @exception SQLException if SQL query to db fails.
+	 * @see DpkmConfigureWG#getSwitches() 
 	 */
 	public List<DpkmSwitch> getSwitches ();
 	
@@ -30,40 +33,42 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
 	 * This triggers the switch to generate the keys, configuring its
 	 * WireGuard interface, returning a DPKM_STATUS or error response message. 
 	 * @param dpid DatapathId of the switch. 
-	 * @param cryptoperiod Valid cryptoperiod (seconds) before rekeying.  
+	 * @param cryptoperiod Valid cryptoperiod (seconds) before rekeying.
+	 * @exception Exception if sending set key message fails.
+	 * @see DpkmConfigureWG#sendSetKeyMessage(DatapathId, int)  
 	 */
     public void sendSetKeyMessage (DatapathId dpid, int cryptoperiod);
     
     /** 
-	 * Writes a DPKM_DELETE_KEY message to the switch with the given dpid.</br>
+	 * Writes a DPKM_DELETE_KEY message to the switch with the given dpid. </br>
 	 * This triggers the switch to delete its keys, unconfiguring WireGuard,
 	 * returning a DPKM_STATUS or error response message.
-	 * @param dpid DatapathId of the switch.  
+	 * @param dpid DatapathId of the switch.
+	 * @exception Exception if sending delete key message fails.
+	 * @see DpkmConfigureWG#sendDeleteKeyMessage(DatapathId)  
 	 */
     public void sendDeleteKeyMessage (DatapathId dpid);
     
     /** 
 	 * Returns a full list of peers from the db, mapping fields
 	 * to DpkmPeers objects. 
-	 * @return List<DpkmPeers> List of WG peers in db. 
+	 * @return List<DpkmPeers> List of WG peers in db.
+	 * @exception SQLException if SQL query to db fails.
+	 * @see DpkmConfigureWG#getPeers() 
 	 */
     public List<DpkmPeers> getPeers ();
     
     /** 
-	 * Returns count of peer connections using SQL queries based on statusType or -1 if error.</br>
-	 * Default: count of connections between ipv4AddrA and ipv4AddrB.</br>
-	 * statusType(1): count of connections with the status 'KEY CHANGED'.</br>
-	 * statusType(2): count of connections with the status 'REMOVED'.</br>
-	 * statusType(3): count of connections with communicating TRUE.</br>
-	 * statusType(4): count of connections with the status 'PID1ONLY'.</br>
-	 * statusType(5): count of connections with the status 'BOTH'.</br>
-	 * statusType(6): count of connections with the status 'BOTH CHANGED'.</br>
-	 * statusType(7): count of connections with the status 'BOTH REMOVED'.</br>
+	 * Returns count of peer connections using SQL queries based on statusType 
+	 * or -1 if error. </br>
+	 * Default: count of connections between ipv4AddrA and ipv4AddrB. </br>
 	 * Used internally for a number of conditional statements.  
 	 * @param ipv4AddrA IPv4 Address of a switch 'A'.
 	 * @param ipv4AddrB IPv4 Address of a switch 'B'.
-	 * @param statusType Integer used as a flag. 
+	 * @param statusType String used as a flag. 
 	 * @return int Connection count or error (-1).
+	 * @exception SQLException if SQL query to db fails.
+	 * @see Dpkm#checkConnected(String, String, String)
 	 */
     public int checkConnected(String ipv4AddrA, String ipv4AddrB, String statusType);
     
@@ -73,7 +78,9 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
 	 * This triggers the switch to add the peer info to its WireGuard interface, 
 	 * returning a DPKM_STATUS or error response message. 
 	 * @param sourceDpid DatapathId of the switch adding the peer. 
-	 * @param targetDpid DatapathId of the switch to be added as a peer.  
+	 * @param targetDpid DatapathId of the switch to be added as a peer.
+	 * @exception SQLException if SQL query to db fails.
+	 * @see DpkmConfigureWG#sendAddPeerMessage(String, String)  
 	 */
     public void sendAddPeerMessage(String sourceDpid, String targetDpid);
     
@@ -84,16 +91,20 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
 	 * returning a DPKM_STATUS or error response message. 
 	 * @param sourceDpid DatapathId of the switch removing the peer. 
 	 * @param targetDpid DatapathId of the switch to be removed as a peer.
-	 * @param keyChange Boolean specifying if the key has changed.  
+	 * @param keyChange Boolean specifying if the key has changed. 
+	 * @exception SQLException if SQL query to db fails.
+	 * @see DpkmConfigureWG#sendDeletePeerMessage(String, String, boolean) 
 	 */
     public void sendDeletePeerMessage(String sourceDpid, String targetDpid, boolean keyChange);
     
     /** 
 	 * Writes a FLOW_MOD message to both peer switches to push traffic through WG
 	 * interface in port in accordance to the created flow table entry.</br>
-	 * This enables packets to be encrypted/decrypted and sent between the interfaces.   
+	 * Enables packets to be encrypted/decrypted and sent between the interfaces.   
 	 * @param dpidA DatapathId of peer (switch) A. 
-	 * @param dpidB DatapathId of peer (switch) B.  
+	 * @param dpidB DatapathId of peer (switch) B.
+	 * @exception Exception if sending flow mod message fails.
+	 * @see DpkmConfigureWG#startCommunication(String, String)  
 	 */
     public void startCommunication(String dpidA, String dpidB);
     
@@ -103,7 +114,8 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
 	 * This is decided by the administrator using the top level UI to set endType.   
 	 * @param dpidA DatapathId of peer (switch) A. 
 	 * @param dpidB DatapathId of peer (switch) B.
-	 * @param endType Type of termination (all communication or WG only).  
+	 * @param endType Type of termination (all communication or WG only). 
+	 * @see DpkmConfigureWG#endCommunication(String, String, String) 
 	 */
     public void endCommunication(String dpidA, String dpidB, String endType);
     
@@ -111,15 +123,17 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
 	 * Rekey's the switch after expiry of the given cryptoperiod.</br>
 	 * This consists of reconfiguring the switch using a DPKM_SET_KEY message.   
 	 * @param dpid DatapathId of the switch. 
-	 * @param cryptoperiod Life span of the key in seconds.  
+	 * @param cryptoperiod Life span of the key in seconds.
+	 * @exception Exception if any messages sent during rekeying fail.
+	 * @see DpkmConfigureWG#rekey(String, int)  
 	 */
     public void rekey(String dpid, int cryptoperiod);
     
     /** 
 	 * Compromises switch with id to trigger the revocation procedure.</br>
-	 * This updates the db record and ends all communication with the switch.</br>
-	 * In reality this method is triggered by some third party security software.
-	 * @param id Integer value of switch record in db.   
+	 * This updates the db record and ends all communication with the switch.  
+	 * @param id Integer value of switch record in db.
+	 * @see DpkmConfigureWG#compromiseNode(int)   
 	 */
     public void compromiseNode(int id);
     
@@ -128,6 +142,8 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
 	 * @param dpid DatapathId of the switch.
 	 * @return boolean value in compromised field of switch or true by default 
 	 * 		   to prevent actions against non-existent switch.
+	 * @exception SQLException if SQL query to db fails.
+	 * @see Dpkm#checkCompromised(String)
 	 */
     public boolean checkCompromised(String dpid);
     
@@ -136,7 +152,8 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
 	 * Based on the top-level policy this means reconfiguring the switch with 
 	 * a SET_KEY message or terminating the switch with a DELETE_KEY message.
 	 * @param dpid DatapathId of the switch.
-	 * @param revType Revocation type either reconfigure or terminate switch.   
+	 * @param revType Revocation type either reconfigure or terminate switch.
+	 * @see DpkmConfigureWG#revoke(String, String)   
 	 */
     public void revoke(String dpid, String revType);
     
@@ -145,6 +162,8 @@ public interface IDpkmConfigureWGService extends IFloodlightService {
 	 * Used internally for a number of conditional statements.  
 	 * @param dpid DatapathId of a switch in string format.
 	 * @return int Error count or -1.
+	 * @exception SQLException if SQL query to db fails.
+	 * @see Dpkm#checkError(String)
 	 */
     public int checkError(String dpid);
 }

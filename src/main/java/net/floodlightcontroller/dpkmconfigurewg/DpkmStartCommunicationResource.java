@@ -15,14 +15,19 @@ import org.slf4j.LoggerFactory;
  * @version 1.0
  */
 public class DpkmStartCommunicationResource extends ServerResource {
-	protected static Logger log = LoggerFactory.getLogger(DpkmConfigureWGResource.class);
+	protected static Logger log = 
+			LoggerFactory.getLogger(DpkmConfigureWGResource.class);
 	
 	/** 
-	 * Starts communication for connection with matching peer information in json.</br>
+	 * Starts communication for connection matching peer information in json.</br>
 	 * Deserializes to get both peer switch information, sending FLOW_ADD messages 
 	 * on success.
 	 * @param fmJson Json structure containing peer information.  
-	 * @return String status either success or error. 
+	 * @return String status either success or error.
+	 * @see DpkmManagePeerResource#jsonToDpkmPeer(String)
+	 * @see DpkmConfigureWG#getPeers()
+	 * @see DpkmConfigureWG#checkConnected(String, String, String)
+	 * @see DpkmConfigureWG#startCommunication(String, String) 
 	 */
 	@Post
     public String start(String fmJson) {
@@ -48,7 +53,8 @@ public class DpkmStartCommunicationResource extends ServerResource {
 				break;
 			}
 		}
-		if (configureWG.checkConnected(peers.ipv4AddrA, peers.ipv4AddrB, "COMMUNICATING") > 0) {
+		if (configureWG.checkConnected(peers.ipv4AddrA, peers.ipv4AddrB, 
+				"COMMUNICATING") > 0) {
 			status = "Error! These peers are already communicating.";
 			log.error(status);
 			return ("{\"status\" : \"" + status + "\"}");

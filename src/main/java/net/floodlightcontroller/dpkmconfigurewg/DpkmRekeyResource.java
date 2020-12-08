@@ -18,14 +18,19 @@ import org.slf4j.LoggerFactory;
  * @version 1.0
  */
 public class DpkmRekeyResource extends ServerResource {
-	protected static Logger log = LoggerFactory.getLogger(DpkmConfigureWGResource.class);
+	protected static Logger log = 
+			LoggerFactory.getLogger(DpkmConfigureWGResource.class);
 	
 	
 	/** 
-	 * Rekey's switch matching the given json by running the configuration procedure.</br>
+	 * Rekey's switch matching the given json by running the configuration 
+	 * procedure.</br>
 	 * Deserializes to get switch information, sending SET_KEY message on success.
 	 * @param fmJson Json structure containing switch information.  
-	 * @return String status either success or error. 
+	 * @return String status either success or error.
+	 * @see DpkmConfigureWGResource#jsonToDpkmSwitch(String)
+	 * @see Dpkm#checkCompromised(String)
+	 * @see DpkmConfigureWG#rekey(String, int)
 	 */
 	@Post
 	public synchronized String rekey(String fmJson) {
@@ -38,11 +43,11 @@ public class DpkmRekeyResource extends ServerResource {
 			status = "Error! Could not parse switch info, see log for details.";
 			return ("{\"status\" : \"" + status + "\"}");
 		}
-		if(configureWG.checkCompromised(node.getDpId())) {
+		if(configureWG.checkCompromised(node.dpid)) {
 			status = "Error! Cannot rekey a compromised switch.";
 			return ("{\"status\" : \"" + status + "\"}");
 		}
-		configureWG.rekey(node.getDpId(), node.getCryptoperiod());
+		configureWG.rekey(node.dpid, node.cryptoperiod);
 		status = "DPKM_SET_KEY message sent to switch.";
 		return ("{\"status\" : \"" + status + "\"}");
 	}

@@ -16,7 +16,8 @@ import org.slf4j.LoggerFactory;
  * @version 1.0
  */
 public class DpkmEndCommunicationResource extends ServerResource {
-	protected static Logger log = LoggerFactory.getLogger(DpkmConfigureWGResource.class);
+	protected static Logger log = 
+			LoggerFactory.getLogger(DpkmConfigureWGResource.class);
 	
 	/** 
 	 * Ends communication for connection with matching peer information in json.</br>
@@ -24,6 +25,10 @@ public class DpkmEndCommunicationResource extends ServerResource {
 	 * Either removes flow entirely or modifies flow to continue unencrypted.
 	 * @param fmJson Json structure containing peer information.  
 	 * @return String status either success or error. 
+	 * @see DpkmManagePeerResource#jsonToDpkmPeer(String)
+	 * @see DpkmConfigureWG#getPeers()
+	 * @see DpkmConfigureWG#checkConnected(String, String, String)
+	 * @see DpkmConfigureWG#endCommunication(String, String, String)
 	 */
 	@Post
     public String end(String fmJson) {
@@ -50,7 +55,8 @@ public class DpkmEndCommunicationResource extends ServerResource {
 				break;
 			}
 		}
-		if (configureWG.checkConnected(peers.ipv4AddrA, peers.ipv4AddrB, "COMMUNICATING") == 0) {
+		if (configureWG.checkConnected(peers.ipv4AddrA, peers.ipv4AddrB, 
+				"COMMUNICATING") == 0) {
 			status = "Error! These peers are not communicating.";
 			log.error(status);
 			return ("{\"status\" : \"" + status + "\"}");

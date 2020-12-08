@@ -3,11 +3,9 @@ package net.floodlightcontroller.dpkmconfigurewg;
 import java.util.ArrayList;
 
 import org.projectfloodlight.openflow.protocol.OFFlowAdd;
-import org.projectfloodlight.openflow.protocol.OFFlowDelete;
 import org.projectfloodlight.openflow.protocol.OFFlowModify;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
 import org.projectfloodlight.openflow.protocol.action.OFActionOutput;
-import org.projectfloodlight.openflow.protocol.action.OFActionPopVlan;
 import org.projectfloodlight.openflow.protocol.action.OFActionSetField;
 import org.projectfloodlight.openflow.protocol.action.OFActions;
 import org.projectfloodlight.openflow.protocol.instruction.OFInstruction;
@@ -16,21 +14,15 @@ import org.projectfloodlight.openflow.protocol.instruction.OFInstructionClearAct
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.protocol.oxm.OFOxms;
-import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.EthType;
 import org.projectfloodlight.openflow.types.IPv4Address;
-import org.projectfloodlight.openflow.types.IPv4AddressWithMask;
-import org.projectfloodlight.openflow.types.IpProtocol;
-import org.projectfloodlight.openflow.types.MacAddress;
 import org.projectfloodlight.openflow.types.OFBufferId;
 import org.projectfloodlight.openflow.types.OFPort;
-import org.projectfloodlight.openflow.types.TransportPort;
 import org.projectfloodlight.openflow.types.U8;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import net.floodlightcontroller.core.IOFSwitch;
-import net.floodlightcontroller.core.internal.IOFSwitchService;
 import net.floodlightcontroller.util.FlowModUtils;
 
 /** 
@@ -45,7 +37,8 @@ import net.floodlightcontroller.util.FlowModUtils;
  * @version 1.0
  */
 public class DpkmFlows extends Dpkm{
-	protected static Logger log = LoggerFactory.getLogger(DpkmConfigureWGResource.class);
+	protected static Logger log = 
+			LoggerFactory.getLogger(DpkmConfigureWGResource.class);
 	
 	/** 
 	 * Constructs a FLOW_ADD message for directing any packets received by peerA
@@ -58,7 +51,6 @@ public class DpkmFlows extends Dpkm{
 	 * @return OFFlowAdd message with flow targeting peerA and peerB.
 	 */
 	public OFFlowAdd constructFlowAdd(IOFSwitch peerA, IOFSwitch peerB) {
-		String ipv4A = getIp(peerA.getId().toString(),false);
 		String ipv4B = getIp(peerB.getId().toString(),false);
 		// Create match conditions for switch.
 		Match dpkmMatch = peerA.getOFFactory().buildMatch()
@@ -181,7 +173,8 @@ public class DpkmFlows extends Dpkm{
 	 * @param peerB IOFSwitch instance of a switch B.
 	 * @param before Boolean indicator of rekeying state (before/after).
 	 */
-	protected void handleFlowRekeying(IOFSwitch peerA, IOFSwitch peerB, boolean before) {
+	protected void handleFlowRekeying(IOFSwitch peerA, IOFSwitch peerB, 
+			boolean before) {
 		
 		if(before) {
 			OFFlowModify flowA = constructFlowModify(peerA,peerB);

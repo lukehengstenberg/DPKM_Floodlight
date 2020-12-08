@@ -1,20 +1,14 @@
 package net.floodlightcontroller.dpkmconfigurewg;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.core.internal.IOFSwitchService;
-import net.floodlightcontroller.core.types.SwitchMessagePair;
-import net.floodlightcontroller.storage.IStorageSourceService;
-
 import org.projectfloodlight.openflow.types.DatapathId;
 import org.restlet.resource.Delete;
 import org.restlet.resource.Get;
 import org.restlet.resource.Post;
-import org.restlet.resource.Put;
 import org.restlet.resource.ServerResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,12 +27,14 @@ import com.fasterxml.jackson.databind.MappingJsonFactory;
  * @version 1.0
  */
 public class DpkmConfigureWGResource extends ServerResource {
-	protected static Logger log = LoggerFactory.getLogger(DpkmConfigureWGResource.class);
+	protected static Logger log = 
+			LoggerFactory.getLogger(DpkmConfigureWGResource.class);
 	protected IOFSwitchService switchService;
 	
 	/** 
 	 * Returns a full list of configured switches from the db in json format. 
-	 * @return List<DpkmSwitch> List of WG switches from db. 
+	 * @return List<DpkmSwitch> List of WG switches from db.
+	 * @see DpkmConfigureWG#getSwitches()
 	 */
 	@Get("json")
 	public List<DpkmSwitch> retrieve() {
@@ -52,7 +48,10 @@ public class DpkmConfigureWGResource extends ServerResource {
 	 * Configures WG interface in the given switch and sets the cryptoperiod.</br>
 	 * Deserializes to get dpid and cryptoperiod, sending SET_KEY message on success.
 	 * @param fmJson Json structure containing switch information.  
-	 * @return String status either success or error. 
+	 * @return String status either success or error.
+	 * @see #jsonToDpkmSwitch(String)
+	 * @see DpkmConfigureWG#sendSetKeyMessage(DatapathId, int)
+	 * @see DpkmError#checkError(String) 
 	 */
 	@Post
 	public String configure(String fmJson) {
@@ -66,13 +65,13 @@ public class DpkmConfigureWGResource extends ServerResource {
 			log.error(status);
 			return ("{\"status\" : \"" + status + "\"}");
 		}
-		if(configureWG.checkError(node.getDpId()) > 0) {
+		if(configureWG.checkError(node.dpid) > 0) {
 			status = "Switch has an unresolved error that requires administrator "
 					+ "attention. See log for details.";
 			log.error(status);
 			return ("{\"status\" : \"" + status + "\"}");
 		}
-		configureWG.sendSetKeyMessage(DatapathId.of(node.getDpId()), node.getCryptoperiod());
+		configureWG.sendSetKeyMessage(DatapathId.of(node.dpid), node.cryptoperiod);
 		status = "DPKM_SET_KEY message sent to switch.";
 		return ("{\"status\" : \"" + status + "\"}");
 	}
@@ -82,6 +81,9 @@ public class DpkmConfigureWGResource extends ServerResource {
 	 * Deserializes to get id, finds db record, sending DELETE_KEY message on success.
 	 * @param fmJson Json structure containing switch information.  
 	 * @return String status either success or error. 
+	 * @see #jsonToDpkmSwitch(String)
+	 * @see DpkmConfigureWG#getSwitches()
+	 * @see DpkmConfigureWG#sendDeleteKeyMessage(DatapathId)
 	 */
 	@Delete
 	public String delete(String fmJson) {
@@ -100,8 +102,8 @@ public class DpkmConfigureWGResource extends ServerResource {
 		// Loop through switch records to find switch information.
 		while (iter.hasNext()) {
 			DpkmSwitch s = iter.next();
-			if (s.getId() == node.getId()) {
-				node.setDpId(s.getDpId());
+			if (s.id == node.id) {
+				node.dpid = s.dpid;
 				exists = true;
 				break;
 			}
@@ -111,7 +113,7 @@ public class DpkmConfigureWGResource extends ServerResource {
 			log.error(status);
 			return ("{\"status\" : \"" + status + "\"}");
 		} else {
-			configureWG.sendDeleteKeyMessage(DatapathId.of(node.getDpId()));
+			configureWG.sendDeleteKeyMessage(DatapathId.of(node.dpid));
 			status = "DPKM_DELETE_KEY message sent to switch.";
 			return ("{\"status\" : \"" + status + "\"}");
 		}
@@ -121,7 +123,9 @@ public class DpkmConfigureWGResource extends ServerResource {
 	 * Converts switch information given in json format to a DpkmSwitch object.</br>
 	 * Maps each json value to a field in DpkmSwitch.
 	 * @param fmJson Json structure containing switch information.  
-	 * @return DpkmSwitch switch object created from json. 
+	 * @return DpkmSwitch switch object created from json.
+	 * @exception IOException if parsing json fails.
+	 * @see DpkmSwitch 
 	 */
 	public static DpkmSwitch jsonToDpkmSwitch(String fmJson) {
 		DpkmSwitch node = new DpkmSwitch();
@@ -148,7 +152,7 @@ public class DpkmConfigureWGResource extends ServerResource {
 				}
 				if (n.equalsIgnoreCase("id")) {
 					try {
-						node.setId(Integer.parseInt(jp.getText()));
+						node.id = Integer.parseInt(jp.getText());
 					} catch (NumberFormatException e) {
 						log.error("Unable to parse switch id: {}", jp.getText());
 						//TODO should return some error message via HTTP message
@@ -156,7 +160,7 @@ public class DpkmConfigureWGResource extends ServerResource {
 				}
 				else if (n.equalsIgnoreCase("switchid")) {
 					try {
-						node.setDpId(jp.getText());
+						node.dpid = jp.getText();
 					} catch (IllegalArgumentException e) {
 						log.error("Unable to parse switch DPID: {}", jp.getText());
 						//TODO should return some error message via HTTP message
@@ -164,7 +168,7 @@ public class DpkmConfigureWGResource extends ServerResource {
 				}
 				else if (n.equalsIgnoreCase("cryptoperiod")) {
 					try {
-						node.setCryptoperiod(Integer.parseInt(jp.getText()));
+						node.cryptoperiod = Integer.parseInt(jp.getText());
 					} catch (NumberFormatException e) {
 						log.error("Unable to parse cryptoperiod: {}", jp.getText());
 						//TODO should return some error message via HTTP message
@@ -172,7 +176,7 @@ public class DpkmConfigureWGResource extends ServerResource {
 				}
 				else if (n.equalsIgnoreCase("revType")) {
 					try {
-						node.setStatus(jp.getText());
+						node.status = jp.getText();
 					} catch (IllegalArgumentException e) {
 						log.error("Unable to parse revType: {}", jp.getText());
 						//TODO should return some error message via HTTP message

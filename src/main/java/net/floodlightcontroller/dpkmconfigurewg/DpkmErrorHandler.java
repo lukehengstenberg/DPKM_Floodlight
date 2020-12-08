@@ -1,17 +1,9 @@
 package net.floodlightcontroller.dpkmconfigurewg;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.Collection;
 import java.util.Map;
 
-import org.projectfloodlight.openflow.protocol.OFDpkmAddPeer;
-import org.projectfloodlight.openflow.protocol.OFDpkmDeletePeer;
 import org.projectfloodlight.openflow.protocol.OFDpkmHeader;
 import org.projectfloodlight.openflow.protocol.OFDpkmStatus;
 import org.projectfloodlight.openflow.protocol.OFDpkmStatusFlag;
@@ -19,13 +11,6 @@ import org.projectfloodlight.openflow.protocol.OFErrorType;
 import org.projectfloodlight.openflow.protocol.OFMessage;
 import org.projectfloodlight.openflow.protocol.OFType;
 import org.projectfloodlight.openflow.protocol.errormsg.OFDpkmBaseError;
-import org.projectfloodlight.openflow.protocol.errormsg.OFDpkmDecodeAddPeerError;
-import org.projectfloodlight.openflow.protocol.errormsg.OFDpkmDecodeDeletePeerError;
-import org.projectfloodlight.openflow.protocol.errormsg.OFDpkmExecuteAddPeerError;
-import org.projectfloodlight.openflow.protocol.errormsg.OFDpkmExecuteDeletePeerError;
-import org.projectfloodlight.openflow.protocol.errormsg.OFDpkmGetIpSError;
-import org.projectfloodlight.openflow.protocol.errormsg.OFDpkmGetKeyError;
-import org.projectfloodlight.openflow.types.OFErrorCauseData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,7 +23,6 @@ import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
-import net.floodlightcontroller.restserver.IRestApiService;
 
 /** 
  * Module responsible for handling all errors related to the 
@@ -54,7 +38,8 @@ import net.floodlightcontroller.restserver.IRestApiService;
  * @version 1.0
  */
 public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IOFMessageListener {
-	protected static Logger log = LoggerFactory.getLogger(DpkmErrorHandler.class);
+	protected static Logger log = 
+			LoggerFactory.getLogger(DpkmErrorHandler.class);
 	protected IFloodlightProviderService floodlightProvider;
 	protected IOFSwitchService switchService;
 	protected IDpkmConfigureWGService confWGService;
@@ -83,7 +68,10 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 	 * Listens for all DPKM error messages and passes on to the processing method.  
 	 * @param sw Instance of a switch connected to the controller.
 	 * @param msg The received OpenFlow message.
-	 * @param cntx Floodlight context for registering the listener. 
+	 * @param cntx Floodlight context for registering the listener.
+	 * @see #processResponseMessage(String, OFDpkmStatus) 
+	 * @see #processErrorMessage(IOFSwitch, OFDpkmBaseError)
+	 * @see #checkError(String)
 	 */
 	@Override
 	public Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
@@ -91,10 +79,11 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 			case EXPERIMENTER:
 				// Cast the message to a DPKM OpenFlow experimenter message.
 		    	OFDpkmHeader inExperimenter = (OFDpkmHeader) msg;
-		    	// Subtype 5 means a status message has been received and should be processed. 
+		    	// Subtype 5 means status message received and needs processing. 
 		    	if(inExperimenter.getSubtype() == 5) {
 		    		if(checkError(sw.getId().toString()) > 0) {
-		    			processResponseMessage(sw.getId().toString(), (OFDpkmStatus)msg);
+		    			processResponseMessage(sw.getId().toString(), 
+		    					(OFDpkmStatus)msg);
 		    		}
 		    		break;
 		    	}
@@ -103,7 +92,7 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 		    		break;
 		    	}
 			case ERROR:
-				// Cast the message to a DPKM OpenFlow error message.
+				// Cast the message to an DPKM OpenFlow error message.
 				OFDpkmBaseError inError = (OFDpkmBaseError) msg;
 				// Only handle DPKM related error messages here. 
 				if(inError.getErrType() == OFErrorType.EXPERIMENTER) {
@@ -124,7 +113,8 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 	 * Resolves errors based on type of status response indicating that the message
 	 * is returning as expected.
 	 * @param dpid DatapathId of a switch connected to the controller.
-	 * @param msg The received OpenFlow DPKM Status message. 
+	 * @param msg The received OpenFlow DPKM Status message.
+	 * @see #resolveError(String, String)
 	 */
 	private void processResponseMessage(String dpid, OFDpkmStatus msg) {
 		// Executed if the status response shows WG has been configured.
@@ -151,8 +141,14 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 	 * Calls a handler method based on the type of error and desired strategy. 
 	 * @param sw Instance of a switch connected to the controller.
 	 * @param inError OFDpkmBaseError error message received from the switch.
+	 * @see #handleErrorSetKey(IOFSwitch, String, String)
+	 * @see #handleErrorDeleteKey(IOFSwitch, String, String)
+	 * @see #handleErrorAddPeer(IOFSwitch, String, String, String)
+	 * @see #handleErrorDeletePeer(IOFSwitch, String, String, String)
+	 * @see #handleErrorOther(IOFSwitch, OFDpkmBaseError, String, String)
 	 */
-	private synchronized void processErrorMessage(IOFSwitch sw, OFDpkmBaseError inError) {
+	private synchronized void processErrorMessage(IOFSwitch sw, 
+			OFDpkmBaseError inError) {
 		String errCode, note, ipv4Peer; 
 		switch(inError.getSubtype()) {
 			case 0:
@@ -239,13 +235,18 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 	
 	/** 
 	 * Handles errors caused by a DPKM_SET_KEY message. </br>
-	 * Resends the message twice so the controller has three attempts in total. </br>
-	 * If all three attempts fail mark the error as ACTION_NEEDED which means the
-	 * switch is now blocked from performing DPKM related functions until the 
-	 * administrator marks it as resolved. 
+	 * Resends the message twice so the controller has three attempts. </br>
+	 * If all three attempts fail mark the error as ACTION_NEEDED.
+	 * The switch is now blocked from performing DPKM related functions until 
+	 * administrator marks the error as resolved. 
 	 * @param sw Instance of a switch connected to the controller.
 	 * @param errCode Error code identifying a specific error.
 	 * @param note Extra information about the error.
+	 * @see #logError(String, String, String, String)
+	 * @see #checkAttempt(String, String)
+	 * @see #updateAttempt(String, String)
+	 * @see #updateMaxAttempt(String, String, String)
+	 * @see DpkmConfigureWG#sendSetKeyMessage(org.projectfloodlight.openflow.types.DatapathId, int)
 	 */
 	private synchronized void handleErrorSetKey(IOFSwitch sw, String errCode, 
 			String note) {
@@ -257,7 +258,6 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 					+ "will be disconnected and must be repaired.", dpid,note);
 			log.error(note);
 			updateMaxAttempt(dpid, errCode, "ACTION NEEDED");
-			//sw.disconnect();
 		}
 		else if(checkErrorCount(dpid,errCode) > 0) {
 			log.error(String.format("Attempt %s: Switch '%s' %s", 
@@ -273,13 +273,19 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 	
 	/** 
 	 * Handles errors caused by a DPKM_DELETE_KEY message. </br>
-	 * Resends the message twice so the controller has three attempts in total. </br>
-	 * If all three attempts fail mark the error as ACTION_NEEDED which means the
-	 * switch is now blocked from performing DPKM related functions until the 
-	 * administrator marks it as resolved. 
+	 * Resends the message twice so the controller has three attempts. </br>
+	 * If all three attempts fail mark the error as ACTION_NEEDED.
+	 * The switch is now blocked from performing DPKM related functions until 
+	 * administrator marks the error as resolved. 
 	 * @param sw Instance of a switch connected to the controller.
 	 * @param errCode Error code identifying a specific error.
 	 * @param note Extra information about the error.
+	 * @see #logError(String, String, String, String)
+	 * @see #checkAttempt(String, String)
+	 * @see #updateAttempt(String, String)
+	 * @see #updateMaxAttempt(String, String, String)
+	 * @see DpkmConfigureWG#sendDeleteKeyMessage(org.projectfloodlight.openflow.types.DatapathId)
+	 * @see Dpkm#removeSwitch(String)
 	 */
 	private synchronized void handleErrorDeleteKey(IOFSwitch sw, String errCode, 
 			String note) {
@@ -291,7 +297,6 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 					+ "will be disconnected and must be repaired.", dpid,note);
 			log.error(note);
 			updateMaxAttempt(dpid, errCode, "ACTION NEEDED");
-			//sw.disconnect();
 			removeSwitch(getIp(dpid,false));
 		}
 		else if(checkErrorCount(dpid,errCode) > 0) {
@@ -308,14 +313,21 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 	
 	/** 
 	 * Handles errors caused by a DPKM_ADD_PEER message. </br>
-	 * Resends the message twice so the controller has three attempts in total. </br>
-	 * If all three attempts fail mark the error as ACTION_NEEDED which means the
-	 * switch is now blocked from performing DPKM related functions until the 
-	 * administrator marks it as resolved. 
+	 * Resends the message twice so the controller has three attempts. </br>
+	 * If all three attempts fail mark the error as ACTION_NEEDED.
+	 * The switch is now blocked from performing DPKM related functions until 
+	 * administrator marks the error as resolved. 
 	 * @param sw Instance of a switch connected to the controller.
 	 * @param errCode Error code identifying a specific error.
 	 * @param note Extra information about the error.
 	 * @param ipv4Peer IPv4 address of the peer switch.
+	 * @see #logError(String, String, String, String)
+	 * @see #checkAttempt(String, String)
+	 * @see #updateAttempt(String, String)
+	 * @see #updateMaxAttempt(String, String, String)
+	 * @see DpkmConfigureWG#sendAddPeerMessage(String, String)
+	 * @see Dpkm#removeSwitch(String)
+	 * @see Dpkm#removePeerConnection(String, String)
 	 */
 	private synchronized void handleErrorAddPeer(IOFSwitch sw,  String errCode, 
 			String note, String ipv4Peer) {
@@ -342,7 +354,6 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 				removePeerConnection(ipv4A,ipv4Peer);
 				confWGService.sendDeletePeerMessage(peerDpid, dpid, false);
 			}
-			//sw.disconnect();
 			removeSwitch(ipv4A);
 		}
 		else if(checkErrorCount(dpid,errCode) > 0) {
@@ -368,14 +379,21 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 	
 	/** 
 	 * Handles errors caused by a DPKM_DELETE_PEER message. </br>
-	 * Resends the message twice so the controller has three attempts in total. </br>
-	 * If all three attempts fail mark the error as ACTION_NEEDED which means the
-	 * switch is now blocked from performing DPKM related functions until the 
-	 * administrator marks it as resolved. 
+	 * Resends the message twice so the controller has three attempts. </br>
+	 * If all three attempts fail mark the error as ACTION_NEEDED.
+	 * The switch is now blocked from performing DPKM related functions until 
+	 * administrator marks the error as resolved. 
 	 * @param sw Instance of a switch connected to the controller.
 	 * @param errCode Error code identifying a specific error.
 	 * @param note Extra information about the error.
 	 * @param ipv4Peer IPv4 address of the peer switch.
+	 * @see #logError(String, String, String, String)
+	 * @see #checkAttempt(String, String)
+	 * @see #updateAttempt(String, String)
+	 * @see #updateMaxAttempt(String, String, String)
+	 * @see DpkmConfigureWG#sendDeletePeerMessage(String, String, boolean)
+	 * @see Dpkm#removeSwitch(String)
+	 * @see Dpkm#removePeerConnection(String, String)
 	 */
 	private synchronized void handleErrorDeletePeer(IOFSwitch sw, String errCode, 
 			String note, String ipv4Peer) {
@@ -393,7 +411,6 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 					+ "will be disconnected and must be repaired.", dpid,note);
 			log.error(note);
 			updateMaxAttempt(dpid, errCode, "ACTION NEEDED");
-			//sw.disconnect();
 			// Remove the faulty switch as a peer on the working switch.
 			confWGService.sendDeletePeerMessage(peerDpid, dpid, false);
 			removePeerConnection(ipv4,ipv4Peer);
@@ -416,14 +433,19 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 	 * messages. </br>
 	 * Identifies the message that caused the error by extracting the msgType 
 	 * from the returned error message string. </br>
-	 * Resends the message twice so the controller has three attempts in total. </br>
-	 * If all three attempts fail mark the error as ACTION_NEEDED which means the
-	 * switch is now blocked from performing DPKM related functions until the 
-	 * administrator marks it as resolved. 
+	 * Resends the message twice so the controller has three attempts. </br>
+	 * If all three attempts fail mark the error as ACTION_NEEDED.
+	 * The switch is now blocked from performing DPKM related functions until 
+	 * administrator marks the error as resolved. 
 	 * @param sw Instance of a switch connected to the controller.
 	 * @param inError OFDpkmBaseError error message received from the switch.
 	 * @param errCode Error code identifying a specific error.
 	 * @param note Extra information about the error.
+	 * @see #handleErrorSetKey(IOFSwitch, String, String)
+	 * @see #handleErrorAddPeer(IOFSwitch, String, String, String)
+	 * @see #handleErrorDeletePeer(IOFSwitch, String, String, String)
+	 * @see #getIpFromKey(String)
+	 * @see #extractIp(OFDpkmBaseError)
 	 */
 	private synchronized void handleErrorOther(IOFSwitch sw, OFDpkmBaseError inError, 
 			String errCode, String note) {
@@ -487,7 +509,8 @@ public class DpkmErrorHandler extends DpkmError implements IFloodlightModule, IO
 
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleDependencies() {
-		Collection<Class<? extends IFloodlightService>> l = new ArrayList<Class<? extends IFloodlightService>>();
+		Collection<Class<? extends IFloodlightService>> l = 
+				new ArrayList<Class<? extends IFloodlightService>>();
 	    l.add(IFloodlightProviderService.class);
 	    l.add(IDpkmConfigureWGService.class);
 	    return l;

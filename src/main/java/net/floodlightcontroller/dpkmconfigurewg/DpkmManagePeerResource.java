@@ -25,11 +25,13 @@ import com.fasterxml.jackson.databind.MappingJsonFactory;
  * @version 1.0
  */
 public class DpkmManagePeerResource extends ServerResource {
-	protected static Logger log = LoggerFactory.getLogger(DpkmConfigureWGResource.class);
+	protected static Logger log = 
+			LoggerFactory.getLogger(DpkmConfigureWGResource.class);
 	
 	/** 
 	 * Returns a full list of peer connections from the db in json format. 
-	 * @return List<DpkmPeers> List of WG peers from db. 
+	 * @return List<DpkmPeers> List of WG peers from db.
+	 * @see DpkmConfigureWG#getPeers() 
 	 */
     @Get("json")
     public List<DpkmPeers> retrieve() {
@@ -41,9 +43,13 @@ public class DpkmManagePeerResource extends ServerResource {
 	
     /** 
 	 * Adds a new peer connection for the switch information in the given json.</br>
-	 * Deserializes to get both peer switch information, sending ADD_PEER message on success.
+	 * Deserializes to get both peer switch information, sending ADD_PEER message 
+	 * on success.
 	 * @param fmJson Json structure containing switch information.  
-	 * @return String status either success or error. 
+	 * @return String status either success or error.
+	 * @see #jsonToDpkmPeer(String)
+	 * @see DpkmConfigureWG#checkConnected(String, String, String)
+	 * @see DpkmConfigureWG#sendAddPeerMessage(String, String) 
 	 */
     @Post
     public String add(String fmJson) {
@@ -56,17 +62,19 @@ public class DpkmManagePeerResource extends ServerResource {
 			status = "Error! Could not parse switch info, see log for details.";
 			return ("{\"status\" : \"" + status + "\"}");
 		}
-		if (configureWG.checkConnected(peers.ipv4AddrA, peers.ipv4AddrB, "CONNECTED") > 0) {
+		if (configureWG.checkConnected(peers.ipv4AddrA, peers.ipv4AddrB, 
+				"CONNECTED") > 0) {
 			status = "Error! A peer connection with this switch already exists.";
 			log.error(status);
 			return ("{\"status\" : \"" + status + "\"}");
 		}
-		else if (configureWG.checkConnected(peers.ipv4AddrA, peers.ipv4AddrB, "CONNECTED") == -1) {
+		else if (configureWG.checkConnected(peers.ipv4AddrA, peers.ipv4AddrB, 
+				"CONNECTED") == -1) {
 			status = "Error! Failed to access the database.";
 			log.error(status);
 			return ("{\"status\" : \"" + status + "\"}");
 		} else {
-			// Send add peer message to one switch, add second after status response.  
+			// Send add peer msg to one switch, add second after response.  
 			configureWG.sendAddPeerMessage(peers.dpidA, peers.dpidB);
 			status = "DPKM_ADD_PEER message sent to switch.";
 
@@ -76,9 +84,13 @@ public class DpkmManagePeerResource extends ServerResource {
     
     /** 
 	 * Deletes a peer connection for db record matching the id in the json.</br>
-	 * Deserializes to get id, finds db record, sending DELETE_PEER message on success.
+	 * Deserializes to get id, finds db record, sending DELETE_PEER message 
+	 * on success.
 	 * @param fmJson Json structure containing peer information.  
-	 * @return String status either success or error. 
+	 * @return String status either success or error.
+	 * @see #jsonToDpkmPeer(String)
+	 * @see DpkmConfigureWG#getPeers()
+	 * @see DpkmConfigureWG#sendDeletePeerMessage(String, String, boolean)  
 	 */
     @Delete
     public String delete(String fmJson) {
@@ -87,7 +99,8 @@ public class DpkmManagePeerResource extends ServerResource {
 				.get(IDpkmConfigureWGService.class.getCanonicalName());
     	DpkmPeers peers = jsonToDpkmPeer(fmJson);
     	if (peers == null) {
-			return "{\"status\" : \"Error! Could not parse switch info, see log for details.\"}";
+			return "{\"status\" : \"Error! Could not parse switch info, "
+					+ "see log for details.\"}";
 		}
 		String status = null;
 		boolean exists = false;
@@ -107,7 +120,7 @@ public class DpkmManagePeerResource extends ServerResource {
 			log.error(status);
 			return ("{\"status\" : \"" + status + "\"}");
 		} else {
-			// Send delete peer message to one switch, delete second after status response.
+			// Send delete peer msg to one switch, delete second after response.
 			configureWG.sendDeletePeerMessage(peers.dpidA, peers.dpidB, false);
 			status = "DPKM_DELETE_PEER message sent to switch.";
 
@@ -119,7 +132,9 @@ public class DpkmManagePeerResource extends ServerResource {
 	 * Converts peer information given in json format to a DpkmPeers object.</br>
 	 * Maps each json value to a field in DpkmPeers.
 	 * @param fmJson Json structure containing peer information.  
-	 * @return DpkmPeers switch peer object created from json. 
+	 * @return DpkmPeers peer connection object created from json.
+	 * @exception IOException if parsing json fails.
+	 * @see DpkmPeers 
 	 */
     public static DpkmPeers jsonToDpkmPeer(String fmJson) {
 		DpkmPeers peers = new DpkmPeers();
@@ -157,7 +172,8 @@ public class DpkmManagePeerResource extends ServerResource {
 					try {
 						peers.dpidA = jp.getText();
 					} catch (IllegalArgumentException e) {
-						log.error("Unable to parse source switch DPID: {}", jp.getText());
+						log.error("Unable to parse source switch DPID: {}", 
+								jp.getText());
 						//TODO should return some error message via HTTP message
 					}
 				}
@@ -165,7 +181,8 @@ public class DpkmManagePeerResource extends ServerResource {
 					try {
 						peers.ipv4AddrA = jp.getText();
 					} catch (IllegalArgumentException e) {
-						log.error("Unable to parse source switch IPv4 Address: {}", jp.getText());
+						log.error("Unable to parse source switch IPv4 Address: {}", 
+								jp.getText());
 						//TODO should return some error message via HTTP message
 					}
 				}
@@ -173,7 +190,8 @@ public class DpkmManagePeerResource extends ServerResource {
 					try {
 						peers.dpidB = jp.getText();
 					} catch (IllegalArgumentException e) {
-						log.error("Unable to parse target switch DPID: {}", jp.getText());
+						log.error("Unable to parse target switch DPID: {}", 
+								jp.getText());
 						//TODO should return some error message via HTTP message
 					}
 				}
@@ -181,7 +199,8 @@ public class DpkmManagePeerResource extends ServerResource {
 					try {
 						peers.ipv4AddrB = jp.getText();
 					} catch (IllegalArgumentException e) {
-						log.error("Unable to parse target switch IPv4 Address: {}", jp.getText());
+						log.error("Unable to parse target switch IPv4 Address: {}", 
+								jp.getText());
 						//TODO should return some error message via HTTP message
 					}
 				}

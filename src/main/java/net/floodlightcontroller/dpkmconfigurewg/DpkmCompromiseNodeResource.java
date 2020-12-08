@@ -14,14 +14,17 @@ import org.slf4j.LoggerFactory;
  * @version 1.0
  */
 public class DpkmCompromiseNodeResource extends ServerResource {
-	protected static Logger log = LoggerFactory.getLogger(DpkmConfigureWGResource.class);
+	protected static Logger log = 
+			LoggerFactory.getLogger(DpkmConfigureWGResource.class);
 	
 	/** 
 	 * Compromise the switch with matching info in the given fmJson. </br>
 	 * Calls compromiseNode with the id which ends all communication with the
 	 * switch and sets it as "COMPROMISED".
 	 * @param fmJson Json structure containing switch information.  
-	 * @return String status either success or error. 
+	 * @return String status either success or error.
+	 * @see DpkmConfigureWGResource#jsonToDpkmSwitch(String)
+	 * @see DpkmConfigureWG#compromiseNode(int)
 	 */
 	@Post
 	public String compromise(String fmJson) {
@@ -36,7 +39,7 @@ public class DpkmCompromiseNodeResource extends ServerResource {
 			return ("{\"status\" : \"" + status + "\"}");
 		}
 
-		configureWG.compromiseNode(node.getId());
+		configureWG.compromiseNode(node.id);
 		status = "Node has been compromised.";
 		return ("{\"status\" : \"" + status + "\"}");
 	}
